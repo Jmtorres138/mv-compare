@@ -1,0 +1,143 @@
+---
+title: "01_evaluate_significant_genes.Rmd"
+author: "Jason Torres"
+date: "August 7, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Setup 
+
+```{r}
+"%&%" <- function(a,b) paste0(a,b)
+
+library("data.table")
+library("dplyr")
+library("Homo.sapiens")
+
+server.dir <- "/Users/jtorres/FUSE/"
+work.dir <- server.dir %&% "projects/mv-compare/"
+input.dir <- work.dir %&% "input_files/"
+sig.results.file <- input.dir %&% "metaxcan_full_results_0.01_only.txt"
+sig.df <- fread(sig.results.file)
+
+```
+
+
+```{r}
+
+
+get_go_info <- function(genename){
+  #goid.vec <- (select(Homo.sapiens,keys=genename,keytype="SYMBOL",columns="GO"))$GO
+  goid.vec <- tryCatch({(select(Homo.sapiens,keys=genename,keytype="SYMBOL",columns="GO"))$GO},
+                       warning=function(war){return(NA)},
+                       error=function(err){
+                         return(NA)
+                       })
+
+  if (is.na(goid.vec)==FALSE){
+    go.df <- select(GO.db,keys=goid.vec,columns=columns(GO.db)[1:4])
+    gene_name <- rep(genename,dim(go.df)[1])
+    go.df <- cbind(gene_name,go.df)
+  } else{
+    go.df <- data.frame("gene_name"=NA,"DEFINITION"=NA,"GOID"=NA,"ONTOLOGY"=NA,"TERM"=NA)
+  }
+  return(go.df)    
+}
+
+build_sig_go_df <- function(){
+  out.df <- c()
+  pb <- txtProgressBar(min=0,max=length(unique(sig.df$gene)),initial=1,style=3)
+  for (i in 1:length(unique(sig.df$gene_name))){
+    setTxtProgressBar(pb,i)
+    gene <- unique(sig.df$gene_name)[i]
+    print(gene)
+    df <- get_go_info(gene)
+    out.df <- rbind(out.df,df)
+  }
+  return(out.df)
+}
+
+sig.go.df <- build_sig_go_df()
+sig.go.df$gene_name <- as.character(sig.go.df$gene_name)
+saveRDS(sig.go.df,work.dir%&%"sig.go.df.RDS")
+
+
+```
+
+
+# GO Enrichment Analysis 
+
+```{r}
+
+#source("http://bioconductor.org/biocLite.R")
+#biocLite("topGO")
+library("topGO")
+
+metab.vec <- unique(sig.df$metabolite)
+metab <- metab.vec[1]
+sig.genes <- unique(filter(sig.df,metabolite==metab)$gene)
+ensgenes <- unique(keys(Homo.sapiens,keytype="ENSEMBL"))
+geneList <- as.factor(as.integer(ensgenes %in% sig.genes))
+names(geneList) <- ensgenes
+
+get_go_ids <- function(ensid){
+  goid.vec <- tryCatch({(select(Homo.sapiens,keys=ensid,keytype="ENSEMBL",columns="GO"))$GO},
+                       warning=function(war){return(NA)},
+                       error=function(err){
+                         return(NA)
+                       })
+  return(goid.vec)    
+}
+
+build_ens_go_list <- function(){
+  out.list <- list()
+  pb <- txtProgressBar(min=0,max=length(ensgenes),initial=1,style=3)
+  for (i in 1:length(ensgenes)){
+    setTxtProgressBar(pb,i)
+    ens <- ensgenes[i]
+    go.vec <- get_go_ids(ens)
+    out.list[[ens]] <- go.vec
+  }
+  return(out.list)
+}
+
+go.list <- build_ens_go_list()
+
+```
+
+
+
+
+```{r}
+
+#source("http://bioconductor.org/biocLite.R")
+#biocLite("topGO")
+library("topGO")
+
+
+geneID2GO <- readMappings(file = system.file("examples/geneid2go.map", package = "topGO"))
+geneNames <- names(geneID2GO)
+myInterestingGenes <- sample(geneNames, length(geneNames) / 10)
+geneList <- factor(as.integer(geneNames %in% myInterestingGenes))
+names(geneList) <- geneNames
+GOdata <- new("topGOdata", ontology = "MF", allGenes = geneList,annotationFun = annFUN.gene2GO, gene2GO = geneID2GO)
+resultFisher <- runTest(GOdata, algorithm = "classic", statistic = "fisher")
+
+library(topGO)
+library(ALL)
+data(ALL)
+data(geneList)
+affyLib <- paste(annotation(ALL), "db", sep = ".")
+library(package = affyLib, character.only = TRUE)
+
+```
+
+sampleGOdata <- new("topGOdata",
++ description = "Simple session", ontology = "BP",
++ allGenes = geneList, geneSel = topDiffGenes,
++ nodeSize = 10,
++ annot = annFUN.db, affyLib = affyLib)
