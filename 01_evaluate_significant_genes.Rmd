@@ -129,6 +129,7 @@ build_go_results_df <- function(){
 }
 
 go.results.df <- build_go_results_df()
+write.table(x=go.results.df,file=work.dir%&%"metab.sig-go.results.txt",sep="\t",quote=FALSE,row.names=F)
 
 # Useful function genesInTerm(GOdata, sel.terms) $ get the gene annotations in a set GO terms 
 # Term Stat gets useful GO statistics: termStat(GOdata, sel.terms)
