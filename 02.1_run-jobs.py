@@ -7,6 +7,7 @@ Usage: python 02.1_run-jobs
 # libraries
 
 import sys,os,gzip
+import subprocess as sp 
 
 work_dir = "/well/got2d/jason/projects/mv-compare/"
 in_dir = work_dir + "input_files/"
@@ -50,7 +51,7 @@ echo "end time" `date`
     fout.write(script)
     fout.close()
     call = ["qsub", job_file]
-    sp.check_call(call))
+    sp.check_call(call)
 
 def main():
     metab_list = get_metab_list()
