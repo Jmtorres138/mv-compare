@@ -21,17 +21,17 @@ metab <- args[1]
 ont <- args[2]
 
 
-#Assess Gene's contribution to gene set enrichment 
+#Assess Gene's contribution to gene set enrichment
 
 
 go_enrich_metab_nodrop <- function(metab,gene.vec,ont="BP",pval.thresh=0.01){
-  # gene.vec is vector of ensid ids for significant genes or set of interest 
+  # gene.vec is vector of ensid ids for significant genes or set of interest
   ensgenes <- unique(keys(Homo.sapiens,keytype="ENSEMBL"))
   geneList <- as.factor(as.integer(ensgenes %in% gene.vec))
-  names(geneList) <- ensgenes 
-  # Build topGOdata object 
-  GOdata <- new("topGOdata", ontology = ont, 
-                allGenes = geneList,annotationFun = annFUN.org, 
+  names(geneList) <- ensgenes
+  # Build topGOdata object
+  GOdata <- new("topGOdata", ontology = ont,
+                allGenes = geneList,annotationFun = annFUN.org,
                 mapping="org.Hs.eg.db",ID="ensembl")
   result.fisher <- runTest(GOdata,algorithm="classic",statistic="fisher")
   pval.fisher <- sort(score(result.fisher))
@@ -49,14 +49,14 @@ go_enrich_metab_nodrop <- function(metab,gene.vec,ont="BP",pval.thresh=0.01){
 }
 
 go_enrich_metab_drop <- function(metab,gene.vec,dropped.gene,nodrop.df,ont="BP"){
-  # gene.vec is vector of ensid ids for significant genes or set of interest 
-  sub.vec <- sig.genes[sig.genes!=dropped.gene]
+  # gene.vec is vector of ensid ids for significant genes or set of interest
+  sub.vec <- gene.vec[gene.vec!=dropped.gene]
   ensgenes <- unique(keys(Homo.sapiens,keytype="ENSEMBL"))
   geneList <- as.factor(as.integer(ensgenes %in% sub.vec))
-  names(geneList) <- ensgenes 
-  # Build topGOdata object 
-  GOdata <- new("topGOdata", ontology = ont, 
-                allGenes = geneList,annotationFun = annFUN.org, 
+  names(geneList) <- ensgenes
+  # Build topGOdata object
+  GOdata <- new("topGOdata", ontology = ont,
+                allGenes = geneList,annotationFun = annFUN.org,
                 mapping="org.Hs.eg.db",ID="ensembl")
   result.fisher <- runTest(GOdata,algorithm="classic",statistic="fisher")
   pval.fisher <- sort(score(result.fisher))
@@ -87,7 +87,7 @@ build_go_file <- function(metab,ont){
   for (i in 1:length(sig.genes)){
     setTxtProgressBar(pb,i)
     dgene <- sig.genes[i]
-    build.df <- go_enrich_metab_drop(metab,sig.genes,dgene,nodrop.df,ont) 
+    build.df <- go_enrich_metab_drop(metab,sig.genes,dgene,nodrop.df,ont)
     out.df <- rbind(out.df,build.df)
   }
   savename <- output.dir %&% metab %&% "_GO_" %&% ont %&% ".txt"
