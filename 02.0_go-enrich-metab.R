@@ -13,7 +13,7 @@ server.dir <- "/well/got2d/jason/"
 work.dir <- server.dir %&% "projects/mv-compare/"
 input.dir <- work.dir %&% "input_files/"
 output.dir <- work.dir %&% "output_files/"
-sig.results.file <- input.dir %&% "metaxcan_full_results_0.01_only.txt"
+sig.results.file <- input.dir %&% "metaxcan_full_results_filtered_for_model_fit_and_pval_at_0.01.txt"
 sig.df <- fread(sig.results.file)
 
 args = commandArgs(trailingOnly=TRUE)

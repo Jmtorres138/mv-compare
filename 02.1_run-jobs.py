@@ -7,14 +7,15 @@ Usage: python 02.1_run-jobs
 # libraries
 
 import sys,os,gzip
-import subprocess as sp 
+import subprocess as sp
 
 work_dir = "/well/got2d/jason/projects/mv-compare/"
 in_dir = work_dir + "input_files/"
 out_dir = work_dir + "output_files/"
 job_dir = work_dir + "jobs/"
 log_dir = work_dir + "logs/"
-sig_file = in_dir + "metaxcan_full_results_0.01_only.txt"
+sig_file = in_dir + "metaxcan_full_results_filtered_for_model_fit_and_pval_at_0.01.txt"
+Rscript = "/apps/well/R/3.3.1/bin/Rscript"
 
 def get_metab_list():
     metab_list = []
@@ -32,7 +33,7 @@ def get_metab_list():
 def run_job(metab,ont):
     job_file = job_dir+"job_"+metab+"_"+ont+".sh"
     fout=open(job_file,'w')
-    command_list  = ["Rscript","--vanilla",work_dir+"02.0_go-enrich-metab.R",metab,ont]
+    command_list  = [Rscript,"--vanilla",work_dir+"02.0_go-enrich-metab.R",metab,ont]
     command = " ".join(command_list)
     script='''
 #$ -N %s
@@ -42,8 +43,6 @@ def run_job(metab,ont):
 #$ -e %s.error
 #$ -o %s.out
 echo "start time" `date`
-
-module load R/3.3.1
 
 %s
 echo "end time" `date`
