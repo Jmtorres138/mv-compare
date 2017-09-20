@@ -13,7 +13,7 @@ sig.df <- fread(sig.results.file)
 
 
 
-# Create reference of Gene Ontology (GO) terms for each significant gene  
+# Create reference of Gene Ontology (GO) terms for each significant gene
 
 get_go_info <- function(genename){
   goid.vec <- tryCatch({(select(Homo.sapiens,keys=genename,keytype="SYMBOL",columns="GO"))$GO},
@@ -21,7 +21,7 @@ get_go_info <- function(genename){
                        error=function(err){
                          return(NA)
                        })
-  
+
   if (is.na(goid.vec)==FALSE){
     go.df <- select(GO.db,keys=goid.vec,columns=columns(GO.db)[1:4])
     gene_name <- rep(genename,dim(go.df)[1])
@@ -29,7 +29,7 @@ get_go_info <- function(genename){
   } else{
     go.df <- data.frame("gene_name"=NA,"DEFINITION"=NA,"GOID"=NA,"ONTOLOGY"=NA,"TERM"=NA)
   }
-  return(go.df)    
+  return(go.df)
 }
 
 get_go_ids <- function(ensid){
@@ -38,7 +38,7 @@ get_go_ids <- function(ensid){
                        error=function(err){
                          return(NA)
                        })
-  return(goid.vec)    
+  return(goid.vec)
 }
 
 build_sig_go_df <- function(){
@@ -59,7 +59,7 @@ sig.go.df$gene_name <- as.character(sig.go.df$gene_name)
 saveRDS(sig.go.df,work.dir%&%"sig.go.df.RDS")
 
 
-# GO Enrichment Analysis 
+# GO Enrichment Analysis
 
 #source("http://bioconductor.org/biocLite.R")
 #biocLite("topGO")
@@ -71,10 +71,10 @@ go_enrich_metab <- function(metab,ont="BP"){
   sig.genes <- unique(filter(sig.df,metabolite==metab)$gene)
   ensgenes <- unique(keys(Homo.sapiens,keytype="ENSEMBL"))
   geneList <- as.factor(as.integer(ensgenes %in% sig.genes))
-  names(geneList) <- ensgenes 
-  # Build topGOdata object 
-  GOdata <- new("topGOdata", ontology = ont, 
-                allGenes = geneList,annotationFun = annFUN.org, 
+  names(geneList) <- ensgenes
+  # Build topGOdata object
+  GOdata <- new("topGOdata", ontology = ont,
+                allGenes = geneList,annotationFun = annFUN.org,
                 mapping="org.Hs.eg.db",ID="ensembl")
   result.fisher <- runTest(GOdata,algorithm="classic",statistic="fisher")
   pval.fisher <- sort(score(result.fisher))
@@ -96,6 +96,7 @@ build_go_results_df <- function(){
   for (i in 1:length(metab.vec)){
     setTxtProgressBar(pb,i)
     metab <- metab.vec[i]
+    print(metab)
     bp.df <- suppressMessages(go_enrich_metab(metab,ont="BP"))
     mf.df <- suppressMessages(go_enrich_metab(metab,ont="MF"))
     cc.df <- suppressMessages(go_enrich_metab(metab,ont="CC"))
@@ -109,6 +110,5 @@ build_go_results_df <- function(){
 go.results.df <- build_go_results_df()
 write.table(x=go.results.df,file=work.dir%&%"metab.sig-go.results.txt",sep="\t",quote=FALSE,row.names=F)
 
-# Useful function genesInTerm(GOdata, sel.terms) $ get the gene annotations in a set GO terms 
+# Useful function genesInTerm(GOdata, sel.terms) $ get the gene annotations in a set GO terms
 # Term Stat gets useful GO statistics: termStat(GOdata, sel.terms)
-
