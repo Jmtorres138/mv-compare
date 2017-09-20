@@ -1,0 +1,58 @@
+---
+title: "Untitled"
+author: "Jason Torres"
+date: "September 19, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Setup 
+
+
+```{r}
+"%&%" <- function(a,b) paste0(a,b)
+
+library("data.table")
+library("dplyr")
+library("Homo.sapiens")
+
+server.dir <- "/Users/jtorres/FUSE/"
+
+work.dir <- server.dir %&% "projects/mv-compare/"
+input.dir <- work.dir %&% "input_files/"
+output.dir <- work.dir %&% "output_files/"
+
+known.genefile <- input.dir %&% "causal_genes3.txt"
+metab.df <- fread(known.genefile)
+
+```
+
+
+```{r}
+# http://www.gettinggeneticsdone.com/2015/11/annotables-convert-gene-ids.html
+library("annotables")
+
+get_ensid <- function(symb){
+  sub <- filter(grch37,symbol==symb,!(grepl("H",chr)))
+  return(sub$ensgene)
+}
+
+ensid <- sapply(1:dim(metab.df)[1],function(i){
+  symb <- metab.df$predicted_causal[i]
+  unique(get_ensid(symb))
+})
+
+metab.df$ensid <- ensid
+
+
+```
+
+
+
+
+
+
+
