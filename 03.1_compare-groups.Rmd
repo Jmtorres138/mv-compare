@@ -18,6 +18,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library("data.table")
 library("dplyr")
 library("Homo.sapiens")
+library("ggplot2")
 
 server.dir <- "/Users/jtorres/FUSE/"
 
@@ -27,7 +28,7 @@ output.dir <- work.dir %&% "output_files/"
 
 known.genefile <- input.dir %&% "causal_genes3.txt"
 metab.df <- fread(known.genefile)
-
+sig.go.df <- readRDS(work.dir%&%"sig.go.df.RDS")
 ```
 
 
@@ -39,6 +40,31 @@ get_ensid <- function(symb){
   sub <- filter(grch37,symbol==symb,!(grepl("H",chr)))
   return(sub$ensgene)
 }
+
+get_symbol <- function(ensid){
+  sub <- filter(grch37,ensgene==ensid)
+  if (length(sub$symbol)==0){
+    return(NA)
+  } else{
+    return(unique(sub$symbol)[1])
+  }
+}
+
+get_metab_name <- function(metab){
+  m <- filter(metab.df,MetaboID==metab)$metabolite
+  if (length(m)==0){
+    return(NA)
+  } else{
+    return(unique(m)[1])
+  }
+}
+
+get_go_def <- function(goid){
+  sub <- suppressMessages(select(Homo.sapiens,keys=goid,
+                                 keytype="GO",columns="DEFINITION"))
+  return(sub$DEFINITION[1])
+}
+
 
 ensid <- sapply(1:dim(metab.df)[1],function(i){
   symb <- metab.df$predicted_causal[i]
@@ -52,7 +78,115 @@ metab.df$ensid <- ensid
 
 
 
+Build result data frame
+
+```{r}
+
+
+build_res_df <- function(){
+  file.vec <- list.files(output.dir)
+  out.df <- c()
+  pb <- txtProgressBar(min=0,max=length(file.vec),style=3)
+  for (i in 1:length(file.vec)){
+    setTxtProgressBar(pb,i)
+    f <- file.vec[i]
+    build.df <- fread(output.dir%&%f)
+    out.df <- rbind(out.df,build.df)
+  }
+  return(out.df)
+}
+
+
+res.df <- build_res_df()
+
+pb <- txtProgressBar(min=0,max=dim(res.df)[1],style=3)
+res.df$symbol <- sapply(1:dim(res.df)[1],function(i){
+  setTxtProgressBar(pb,i)
+  ens <- res.df$dropped.gene[i]
+  get_symbol(ens)
+})
+
+pb <- txtProgressBar(min=0,max=dim(res.df)[1],style=3)
+res.df$metab <- sapply(1:dim(res.df)[1],function(i){
+  setTxtProgressBar(pb,i)
+  metab <- res.df$metabolite[i]
+  get_metab_name(metab)
+})
+
+#pb <- txtProgressBar(min=0,max=dim(res.df)[1],style=3)
+#res.df$metab <- sapply(1:dim(res.df)[1],function(i){
+#  setTxtProgressBar(pb,i)
+#  goid <- res.df$GO[i]
+#  get_go_def(goid)
+#})
 
 
 
+
+```
+
+
+```{r}
+
+known <- c() 
+pb <- txtProgressBar(min=0,max=dim(res.df)[1],style = 3)
+for (i in 1:dim(res.df)[1]){
+  setTxtProgressBar(pb,i)
+  m <- res.df$metabolite[i]
+  d <- res.df$dropped.gene[i]
+  if (d =="full"){
+    known <- append(known,NA)
+  } else{
+    sub <- filter(metab.df,MetaboID==m,ensid==d)
+    if (dim(sub)[1]==0){
+      known <- append(known,FALSE)
+    } else{
+      known <- append(known,TRUE)
+    }
+  }
+}
+
+res.df$known <- known
+```
+
+
+# Profile GO results 
+
+
+```{r}
+
+sig.df <- filter(res.df,pval.adj < 0.05)
+
+test.df <- filter(sig.df,metabolite=="M00606",GO=="GO:0008655")
+
+plt <- ggplot(data=test.df,aes(x=dropped.gene,y=-log(pval.adj,base=10))) + 
+  geom_hline(data=filter(test.df,dropped.gene=="full"),
+             aes(yintercept=-log(pval.adj,base=10)),
+             color="firebrick4",linetype=3) + 
+  geom_hline(yintercept=-log(0.05,base=10),
+             color="firebrick4",linetype=2) +
+  geom_point(data=filter(test.df,dropped.gene!="full"),
+             shape=23,size=4,aes(color=impact,fill=known)) +
+  scale_y_continuous(limits=c(0,8),breaks=seq(0,8,1)) + 
+  scale_color_manual(values=c("black","gray"),
+                    name="Impact",labels=c("Increases \nGO enrichemnt",
+                                           "Decreases \nGO enrichment")) + 
+  scale_fill_brewer(type="qual",palette="Set2",
+                    name="Metabolite causal gene") + 
+  theme_bw() + 
+  theme(panel.grid.minor = element_blank(),
+                     panel.grid.major = element_blank(),
+                     axis.text.x = element_text(angle=90,size=6)) + 
+  xlab("Dropped Gene") + 
+  ylab(expression(paste(-log[10](`p-value`)))) + 
+  geom_text(data=filter(test.df,impact=="less.sig"),
+            aes(x=dropped.gene,y=-log(pval.adj,base=10),
+                label=symbol),vjust = -2, nudge_x = 0.05,size=2) + 
+  ggtitle("Metabolite: " %&% test.df$metab[1] %&% " (" %&% 
+            test.df$metabolite[1] %&% ")" %&% 
+            "\nPathway: " %&% test.df$GO[1])
+
+```
+
+Accent, Dark2, Paired, Pastel1, Pastel2, Set1, Set2, Set3
 
