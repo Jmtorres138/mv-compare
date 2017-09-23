@@ -19,6 +19,8 @@ library("data.table")
 library("dplyr")
 library("Homo.sapiens")
 library("ggplot2")
+library(gridExtra)
+library(grid)
 
 server.dir <- "/Users/jtorres/FUSE/"
 
@@ -28,25 +30,37 @@ output.dir <- work.dir %&% "output_files/"
 
 known.genefile <- input.dir %&% "causal_genes3.txt"
 metab.df <- fread(known.genefile)
-sig.go.df <- readRDS(work.dir%&%"sig.go.df.RDS")
+plot.dir <- work.dir %&% "plots/"
+
+mtxn.df <- fread(input.dir %&% "metaxcan_full_results_filtered_for_model_fit_and_pval_at_0.01.txt")
+
 ```
 
 
 ```{r}
 # http://www.gettinggeneticsdone.com/2015/11/annotables-convert-gene-ids.html
-library("annotables")
+#library("annotables")
 
 get_ensid <- function(symb){
-  sub <- filter(grch37,symbol==symb,!(grepl("H",chr)))
-  return(sub$ensgene)
+  #sub <- filter(grch37,symbol==symb,!(grepl("H",chr)))
+  ensgene <- unique(filter(mtxn.df,gene_name==symb)$gene)
+  if (length(ensgene)==0){
+    ensgene <- unique(filter(grch37,symbol==symb,!(grepl("H",chr)))$ensgene)
+  }
+  return(ensgene)
 }
 
 get_symbol <- function(ensid){
-  sub <- filter(grch37,ensgene==ensid)
-  if (length(sub$symbol)==0){
-    return(NA)
+  symb <- unique(filter(mtxn.df,gene==ensid)$gene_name)
+  if (length(symb)==0){
+    sub <- filter(grch37,ensgene==ensid)
+    if (length(sub$symbol)==0){
+      return(NA)
+    } else{
+      return(unique(sub$symbol)[1])
+    }    
   } else{
-    return(unique(sub$symbol)[1])
+    return(symb[1])
   }
 }
 
@@ -65,7 +79,6 @@ get_go_def <- function(goid){
   return(sub$DEFINITION[1])
 }
 
-
 ensid <- sapply(1:dim(metab.df)[1],function(i){
   symb <- metab.df$predicted_causal[i]
   unique(get_ensid(symb))
@@ -75,7 +88,6 @@ metab.df$ensid <- ensid
 
 
 ```
-
 
 
 Build result data frame
@@ -120,9 +132,6 @@ res.df$metab <- sapply(1:dim(res.df)[1],function(i){
 #  get_go_def(goid)
 #})
 
-
-
-
 ```
 
 
@@ -149,44 +158,273 @@ for (i in 1:dim(res.df)[1]){
 res.df$known <- known
 ```
 
+Add impact score 
+
+
+```{r}
+
+
+add_iscore <- function(){
+  pairs <- unique(res.df$metabolite %&% "_" %&% res.df$GO)
+  pb <- txtProgressBar(min=0,max=length(pairs),style=3)
+  out.df <- c() 
+  for (i in 1:length(pairs)){
+    setTxtProgressBar(pb,i)
+    vec <- strsplit(pairs[i],split="_")[[1]]
+    mymetab <- vec[1]; mygo <- vec[2]
+    sub.df <- filter(res.df,metabolite==mymetab,GO==mygo)
+    b <- -log(filter(sub.df,dropped.gene=="full")$pval.adj,base=10)
+    iscore <- b - (-log(sub.df$pval.adj,base=10))
+    sub.df$iscore <- iscore  
+    out.df <- rbind(out.df,sub.df)
+  }
+ return(out.df)
+}
+
+res.full.df <- add_iscore()
+
+write.table(x=res.full.df,file=work.dir%&%"go-enrich-results_full.txt",
+            sep="\t",quote=FALSE,row.names=FALSE)
+```
+
+
+
 
 # Profile GO results 
 
 
 ```{r}
 
-sig.df <- filter(res.df,pval.adj < 0.05)
 
-test.df <- filter(sig.df,metabolite=="M00606",GO=="GO:0008655")
+#test.df <- filter(sig.df,metabolite=="M00606",GO=="GO:0008655")
+#mymetab <- "M00606"; mygo <- "GO:0008655"
 
-plt <- ggplot(data=test.df,aes(x=dropped.gene,y=-log(pval.adj,base=10))) + 
-  geom_hline(data=filter(test.df,dropped.gene=="full"),
-             aes(yintercept=-log(pval.adj,base=10)),
-             color="firebrick4",linetype=3) + 
-  geom_hline(yintercept=-log(0.05,base=10),
-             color="firebrick4",linetype=2) +
-  geom_point(data=filter(test.df,dropped.gene!="full"),
-             shape=23,size=4,aes(color=impact,fill=known)) +
-  scale_y_continuous(limits=c(0,8),breaks=seq(0,8,1)) + 
-  scale_color_manual(values=c("black","gray"),
-                    name="Impact",labels=c("Increases \nGO enrichemnt",
-                                           "Decreases \nGO enrichment")) + 
-  scale_fill_brewer(type="qual",palette="Set2",
-                    name="Metabolite causal gene") + 
-  theme_bw() + 
-  theme(panel.grid.minor = element_blank(),
-                     panel.grid.major = element_blank(),
-                     axis.text.x = element_text(angle=90,size=6)) + 
-  xlab("Dropped Gene") + 
-  ylab(expression(paste(-log[10](`p-value`)))) + 
-  geom_text(data=filter(test.df,impact=="less.sig"),
-            aes(x=dropped.gene,y=-log(pval.adj,base=10),
-                label=symbol),vjust = -2, nudge_x = 0.05,size=2) + 
-  ggtitle("Metabolite: " %&% test.df$metab[1] %&% " (" %&% 
-            test.df$metabolite[1] %&% ")" %&% 
-            "\nPathway: " %&% test.df$GO[1])
+go_plot <- function(mymetab,mygo){
+  plot.df <- filter(sig.df,metabolite==mymetab,GO==mygo)
+  def <- get_go_def(mygo)
+  #def <- substr(def,1,50) %&% "\n" %&% substr(def,51,100) %&% 
+   # "\n" %&% substr(def,101,150) %&% "\n" %&% substr(def,151,200) %&% 
+   # "..."
+  def <- substr(def,1,100) %&% "\n" %&% substr(def,101,200) %&% 
+    "\n" %&% substr(def,201,300) %&% "..."
+  plt <- ggplot(data=plot.df,aes(x=dropped.gene,y=-log(pval.adj,base=10))) + 
+    geom_hline(data=filter(plot.df,dropped.gene=="full"),
+               aes(yintercept=-log(pval.adj,base=10)),
+               color="firebrick4",linetype=3) + 
+    geom_hline(yintercept=-log(0.05,base=10),
+               color="firebrick4",linetype=2) +
+    geom_point(data=filter(plot.df,dropped.gene!="full"),
+               shape=23,size=4,aes(color=impact,fill=known)) +
+    scale_y_continuous(limits=c(0,8),breaks=seq(0,8,1)) + 
+    scale_color_manual(values=c("black","gray"),
+                      name="Impact",labels=c("Increases \nGO enrichemnt",
+                                             "Decreases \nGO enrichment")) + 
+    scale_fill_brewer(type="qual",palette="Dark2", ######
+                      name="Metabolite causal gene") + 
+    theme_bw() + 
+    theme(panel.grid.minor = element_blank(),
+                       panel.grid.major = element_blank(),
+                       axis.text.x = element_text(angle=90,size=6)) + 
+    xlab("Dropped Gene") + 
+    ylab(expression(paste(-log[10](`p-value`)))) + 
+    geom_text(data=filter(plot.df,impact=="less.sig"),
+              aes(x=dropped.gene,y=-log(pval.adj,base=10),
+                  label=symbol),vjust = -2, nudge_x = 0.05,size=2) + 
+    ggtitle("Metabolite: " %&% plot.df$metab[1] %&% " (" %&% 
+              plot.df$metabolite[1] %&% ")" %&% 
+              "\nPathway: " %&% plot.df$GO[1],
+            subtitle = def)  
+  plt
+  ggsave(plot=plt,filename=plot.dir %&% mymetab %&% "-" %&% 
+           gsub(":","_",mygo) %&% ".pdf",width=10,height=5)
+}
+
+go_plot(mymetab,mygo)
 
 ```
 
 Accent, Dark2, Paired, Pastel1, Pastel2, Set1, Set2, Set3
+
+
+Save plots 
+
+```{r}
+
+sig.df <- filter(res.full.df,pval.adj < 0.05)
+write.table(x=sig.df,file=work.dir%&%"go-enrich-results_fdr05.txt",
+            sep="\t",quote=FALSE,row.names=FALSE)
+
+save_plots <- function(){
+  pairs <- unique(sig.df$metabolite %&% "_" %&% sig.df$GO)
+  pb <- txtProgressBar(min=0,max=length(pairs),style=3)
+  for (i in 1:length(pairs)){
+    setTxtProgressBar(pb,i)
+    vec <- strsplit(pairs[i],split="_")[[1]]
+    mymetab <- vec[1]; mygo <- vec[2]
+    go_plot(mymetab,mygo)
+  }
+}
+
+save_plots()
+
+```
+
+
+# Analysis significant results 
+
+```{r}
+
+res.full.df$iscore.scale <- scale(res.full.df$iscore)[1:dim(res.full.df)[1]]
+
+sig.df <- filter(res.full.df,pval.adj < 0.05)
+
+known.df <- filter(sig.df,known=="TRUE")
+nov.df <- filter(sig.df,known=="FALSE")
+
+qqnorm(res.full.df$iscore.scale)
+qqline(res.full.df$iscore.scale,col="red")
+
+qqnorm(nov.df$iscore.scale)
+qqline(nov.df$iscore.scale,col="red")
+
+qqnorm(known.df$iscore.scale)
+qqline(known.df$iscore.scale,col="red")
+
+shapiro.test(sample(res.full.df$iscore.scale,5000)) # Violates normality 
+shapiro.test(sample(sig.df$iscore.scale)) # Violates normality 
+
+ggplot(data=filter(sig.df,dropped.gene!="full"),aes(x=known,y=iscore.scale)) + 
+         geom_jitter(position=position_jitter(0.2)) + 
+  stat_summary(fun.data=mean_sdl, mult=1, 
+               geom="pointrange", color="red")
+
+
+tt <- t.test(nov.df$iscore.scale,known.df$iscore.scale)
+
+wilcox.test(iscore.scale ~ known, data=sig.df) 
+
+```
+
+	Wilcoxon rank sum test with continuity correction
+
+data:  iscore.scale by known
+W = 9779.5, p-value = 0.0003349
+alternative hypothesis: true location shift is not equal to 0
+
+
+
+# Identity genes of interest 
+
+
+```{r}
+
+# Number of Metabolites with causal genes 
+length(unique(metab.df$MetaboID)) # 74 
+# Number of causal genes implicated with metabolites 
+length(unique(metab.df$ensid)) # 93 
+
+# Number of Metabolites with MetaXcan gene associations 
+length(unique(mtxn.df$metabolite)) # 45 
+# Number of genes associated with Metabolites 
+length(unique(mtxn.df$gene)) # 736
+
+# Proprotion of causal genes in MetaXcan gene set 
+sum(unique(metab.df$ensid) %in% unique(mtxn.df$gene))/length(unique(metab.df$ensid)) # 0.44
+
+# Proportion of metabolites with MetaXcan gene sets enriched for GO pathways 
+sum(unique(mtxn.df$metabolite) %in% unique(sig.df$metabolite)) / length(unique(mtxn.df$metabolite)) # 0.31
+
+# Number of enriched GO pathways 
+length(unique(sig.df$GO)) # 72 
+# Number of Known genes in enriched GO pathways 
+length(unique(filter(sig.df,known==TRUE)$dropped.gene)) # 6 
+unique(filter(sig.df,known==TRUE)$symbol)
+# "TYMP"  "UGT1A1"  "SLC6A12" "SLC7A5"  "ACADS"   "SCAPER" 
+# Number of enriched GO pathways corresponding to these 5 known genes 
+length(unique(filter(sig.df,known==TRUE)$GO)) # 26
+# Known genes that impact enrichments 
+length(unique(filter(sig.df,known==TRUE,impact=="less.sig")$dropped.gene)) # TYMP
+unique(filter(sig.df,known==TRUE,impact=="less.sig")$symbol)
+# "TYMP" "UGT1A1"
+
+
+# Number of 'unknown' genes in enriched GO pathways 
+length(unique(filter(sig.df,known==FALSE)$dropped.gene)) # 188
+# Number of 'unknown' genes in enriched GO pathways with impacts on enrichment
+length(unique(filter(sig.df,known==FALSE,impact=="less.sig")$dropped.gene)) # 75
+
+
+
+disc.df <- filter(sig.df,impact=="less.sig") %>% arrange(desc(iscore))
+pairs <- unique(disc.df$metabolite %&% "-" %&% disc.df$GO)
+#pairs <- sapply(1:length(pairs),function(i){
+#  gsub(":","_",pairs[i])
+#})
+
+plot.dir <- "/Users/jtorres/Google Drive/Science/Projects/mv-compare/" %&% "plots/"
+
+save_lesssig_plots <- function(){
+  pairs <- unique(disc.df$metabolite %&% "_" %&% disc.df$GO)
+  pb <- txtProgressBar(min=0,max=length(pairs),style=3)
+  for (i in 1:length(pairs)){
+    setTxtProgressBar(pb,i)
+    vec <- strsplit(pairs[i],split="_")[[1]]
+    mymetab <- vec[1]; mygo <- vec[2]
+    go_plot(mymetab,mygo)
+  }
+}
+
+save_lesssig_plots() 
+
+```
+
+
+
+```{r}
+
+length(unique(filter(sig.df,impact=="less.sig",known==FALSE)$dropped.gene)) # 75 genes 
+length(unique(filter(sig.df,known==FALSE)$dropped.gene)) # 188 genes 
+
+#Potentially novel non-bystander genes 
+length(unique(filter(sig.df,impact=="less.sig",known==FALSE)$dropped.gene))/
+  length(unique(filter(sig.df,known==FALSE)$dropped.gene))
+# 0.40 
+
+#Potentially novel non-bystander genes (sd <= 1) 
+length(unique(filter(sig.df,impact=="less.sig",known==FALSE,iscore.scale>=1)$dropped.gene)) / # 9 genes 
+  length(unique(filter(sig.df,known==FALSE)$dropped.gene))
+# 0.043 
+
+length(unique(filter(sig.df,impact=="less.sig",known==FALSE,iscore.scale>=2)$dropped.gene))/ # 9 genes 
+  length(unique(filter(sig.df,known==FALSE)$dropped.gene))
+# 0.043, same as above 
+
+cand.df <- filter(sig.df,impact=="less.sig",known==FALSE,iscore.scale>=2)
+ggsave(plot=grid.table(cand.df),plot.dir %&% "cand-table.png",height=20,width=20)
+
+```
+
+Table plot of just enriched GO pathways 
+
+```{r}
+
+tab.df <- dplyr::select(sig.df,one_of("metabolite","metab","ontology","GO"))
+tab.df <- tab.df[!duplicated(tab.df),]
+tab.df$Def <- sapply(1:dim(tab.df)[1],function(i){
+  goid <- tab.df$GO[i]
+  def <- get_go_def(goid)
+  def <- substr(def,1,100) %&% "\n" %&% substr(def,101,200) %&% "..."
+  #"\n" %&% substr(def,101,150) %&% "..."
+})
+
+tab1.df <- tab.df[1:30,]
+tab2.df <- tab.df[31:60,]
+tab3.df <- tab.df[61:91,]
+
+ggsave(plot=grid.table(tab1.df),plot.dir %&% "go-table1.png",height=20,width=20)
+ggsave(plot=grid.table(tab2.df),plot.dir %&% "go-table2.png",height=20,width=20)
+ggsave(plot=grid.table(tab3.df),plot.dir %&% "go-table3.png",height=20,width=20)
+
+
+```
 
