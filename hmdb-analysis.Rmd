@@ -55,8 +55,8 @@ make_metab_df <- function(){
   out.df <- c()
   for (i in 1:dim(sub.df)[1]){
     setTxtProgressBar(pb,i)
-    metab <- sub.df$`Most associated metabolite or ratio`[i] #s6.df$`Most associated metabolite or ratio`[i]
-    pcg <- sub.df$`Predicted causal gene`[i]#s6.df$`Predicted causal gene`[i]
+    metab <- sub.df$`Most associated metabolite or ratio`[i] 
+    pcg <- sub.df$`Predicted causal gene`[i]
     mid <- ifelse(length(filter(s2.df,V3==metab)$V2)==0,NA,filter(s2.df,V3==metab)$V2)
     build.df <- data.frame(metabolite=metab,predicted_causal=pcg,MetaboID=mid,stringsAsFactors = FALSE)
     out.df <- rbind(out.df,build.df)
