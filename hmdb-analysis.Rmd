@@ -29,8 +29,9 @@ input.dir <- work.dir %&% "input_files/"
 output.dir <- work.dir %&% "output_files/"
 
 known.genefile <- input.dir %&% "causal_genes3.txt"
-metab.df <- fread(known.genefile)
+metab.old.df <- fread(known.genefile)
 plot.dir <- work.dir %&% "plots/"
+
 
 mtxn.df <- fread(input.dir %&% "metaxcan_full_results_filtered_for_model_fit_and_pval_at_0.01.txt")
 
@@ -39,11 +40,50 @@ hmdb.df <- fread(work.dir %&% "hmdb/hmdb.txt")
 ```
 
 
+Prepare updated metab.df 
+
 
 ```{r}
 
-#mtxn.df$known <- map(mtxn.df$gene_name,function(g){g %in% metab.df$predicted_causal}) %>% 
-#  as.logical(.)
+s2.df <- fread(input.dir %&% "shin_supplemetary_tables_tableS2.txt") %>% dplyr::select(.,one_of("V2","V3")) %>% as.data.frame(.)
+s6.df <- fread(input.dir %&% "shin_supplemetary_tables_tableS6.txt")
+
+make_metab_df <- function(){
+  sub.df <- dplyr::select(s6.df,one_of("Most associated metabolite or ratio","Predicted causal gene"))
+  sub.df <- sub.df[!duplicated(sub.df),] %>% as.data.frame(.)
+  pb <- txtProgressBar(min=0,max=dim(sub.df)[1],style=3)
+  out.df <- c()
+  for (i in 1:dim(sub.df)[1]){
+    setTxtProgressBar(pb,i)
+    metab <- sub.df$`Most associated metabolite or ratio`[i] #s6.df$`Most associated metabolite or ratio`[i]
+    pcg <- sub.df$`Predicted causal gene`[i]#s6.df$`Predicted causal gene`[i]
+    mid <- ifelse(length(filter(s2.df,V3==metab)$V2)==0,NA,filter(s2.df,V3==metab)$V2)
+    build.df <- data.frame(metabolite=metab,predicted_causal=pcg,MetaboID=mid,stringsAsFactors = FALSE)
+    out.df <- rbind(out.df,build.df)
+  }
+  out.df <- filter(out.df,!(grepl("/",metabolite)),!grepl("X-",metabolite),predicted_causal!="unknown")
+  out.df$MetaboID[out.df$metabolite=="Alpha-hydroxyisovalerate"] <- "M33937"
+  out.df$metabolite[out.df$metabolite=="Alpha-hydroxyisovalerate"] <- "alpha-hydroxyisovalerate"
+  out.df$MetaboID[out.df$metabolite=="Serine"] <- "M32315"
+  out.df$metabolite[out.df$metabolite=="Serine"] <- "serine"
+  out.df$MetaboID[out.df$metabolite=="1-palmitoylglycero-phosphoethanolamine"] <- "M35631"
+  out.df$metabolite[out.df$metabolite=="1-palmitoylglycero-phosphoethanolamine"] <- "1-palmitoylglycerophosphoethanolamine"
+  out.df$MetaboID[out.df$metabolite=="HWESASXX"] <- "M32836"
+  out.df <- out.df[!duplicated(out.df),]
+}
+
+metab.df <- make_metab_df()
+
+
+```
+
+
+
+
+
+```{r}
+
+
 mtxn.df$known <- map(1:dim(mtxn.df)[1],function(i){
   m <- mtxn.df$metabolite[i]
   g <- mtxn.df$gene_name[i]
@@ -197,4 +237,185 @@ path.count / length(unique(nov.df$Gene)) # 5% of novel genes are in the same hmd
 go.count / length(unique(nov.df$Gene)) # % 4% of novel genes are in the same go pathways as the known genes associated with metab
 
 ```
+
+
+
+# Make results tables 
+
+## Table 1: Profile of MetaXcan results for known metabolite genes
+
+```{r}
+
+library(gridExtra)
+library(grid)
+
+make_table_1 <- function(){
+  pb <- txtProgressBar(min=0,max=dim(metab.df)[1],style=3)
+  top.q <- c()
+  top.tissue <- c()
+  num.tissues <- c()
+  
+  for (i in 1:dim(metab.df)[1]){
+    setTxtProgressBar(pb,i)
+    metab <- metab.df$metabolite[i]
+    g <- metab.df$predicted_causal[i]
+    id <- metab.df$MetaboID[i]
+    sub <- filter(mtxn.df,gene_name==g,metabolite_name==metab) %>% arrange(FDR_studywide)
+    
+    if (dim(sub)[1]==0){
+      toptiss <- NA
+      topq <- NA
+      numtiss <- NA 
+      
+    } else{
+      toptiss <- sub$Tissue[1]
+      numtiss <- dim(sub)[1]
+      topq <- sub$FDR_studywide[1]
+    }
+    top.q <- append(top.q,topq)
+    top.tissue <- append(top.tissue,toptiss)
+    num.tissues <- append(num.tissues,numtiss)
+  }
+  out.df <- dplyr::select(metab.df,one_of("MetaboID","metabolite","predicted_causal")) %>% as.data.frame(.)
+  out.df$number.mtxn.assoc <- num.tissues
+  out.df$most.sig.tissue <- top.tissue %>% as.character(.)
+  out.df$most.sig.tissue <- gsub("_","-",out.df$most.sig.tissue)
+  out.df$most.siq.qvalue <- top.q
+  out.df <- arrange(out.df,desc(num.tissues))
+  names(out.df) <- c("Metabolite ID","Metabolite Name","Causal Gene","Number of Gene\n Associations","Most Significant\nTissue","q-value")
+  
+  #test.df <- out.df[1:10,]
+  #grob <- tableGrob(out.df)
+  #grid.draw(grob)
+  #grid.newpage()
+  noNA.df <- na.omit(out.df)
+  grob2 <- tableGrob(noNA.df)
+  grid.draw(grob2)  
+  
+}
+
+
+```
+
+
+## Table 2: Profile of novel Metaxcan genes, for those that are annotated to same metabolic pathway as known metabolite genes, to what extent are they significant?
+
+
+
+```{r}
+
+
+slice<-function(x,n) { # https://stackoverflow.com/questions/2434833/how-can-i-partition-a-vector
+    N<-length(x);
+    lapply(seq(1,N,n),function(i) x[i:min(i+n-1,N)])
+}
+
+make_table_2_df  <- function(){
+  
+  
+  # Subset to novel genes annotated in hmdb pathways 
+  sub.df <- filter(mtxn.df,known==FALSE,hmdb==TRUE,metabolite%in%metab.df$MetaboID) %>% dplyr::select(one_of("gene","gene_name","metabolite","metabolite_name",
+                                                                  "Tissue","zscore","pvalue","FDR_studywide"))
+  pred.causal.gene <- c()
+  shared.go.pathways <- c()
+  shared.hmdb.pathways <- c() 
+  pb <- txtProgressBar(min=0,max=dim(sub.df)[1],style=3)
+  for (i in 1:dim(sub.df)[1]){
+    #print(i)
+    setTxtProgressBar(pb,i)
+    g <- sub.df$gene_name[i]
+    mid <- sub.df$metabolite[i]
+    causal.genes.df <- filter(metab.df,MetaboID==mid)
+    pcg <-  causal.genes.df$predicted_causal %>% paste(.,collapse=",")#map(causal.genes.df$predicted_causal,function(s){
+      #vec <- strsplit(s,split=",")[[1]];sliced <- slice(vec,3)
+      #map(sliced,function(vec){paste(vec,collapse=",")}) %>% unlist(.) %>% paste(.,collapse=",\n")
+       #}) %>% as.character(.)
+    query <- get_metab_annot(g)
+    query.go <- query[[1]]
+    query.hmdb <- query[[2]]
+    reflists <-  ifelse(dim(causal.genes.df)[1]>0,map(1:length(causal.genes.df$predicted_causal), function(i){
+      pc <- causal.genes.df$predicted_causal[i]
+      metabs <- get_metab_annot(pc)
+      return(metabs)
+      }),NA)
+    sgp <- ifelse(dim(causal.genes.df)[1]>0,map(1:length(reflists),function(i){ # 
+      go.vec <- reflists[[i]][[1]]
+      overlap <- go.vec[go.vec %in% query.go]
+      if (length(overlap)==0){
+        overlap <- NA
+      }
+      return(overlap)
+    }) %>% unlist(.) %>% as.character(.)  %>% paste0(.,collapse=","),NA) 
+    shp <- ifelse(dim(causal.genes.df)[1]>0,map(1:length(reflists),function(i){
+      hmdb.vec <- reflists[[i]][[2]]
+      overlap <- hmdb.vec[hmdb.vec %in% query.hmdb]
+      if (length(overlap)==0){
+        overlap <- NA
+      }
+      return(overlap)
+    }) %>% unlist(.) %>% as.character(.) %>% paste0(.,collapse=","),NA)
+    pred.causal.gene <- append(pred.causal.gene,pcg)
+    shared.go.pathways <- append(shared.go.pathways,sgp)
+    shared.hmdb.pathways <- append(shared.hmdb.pathways,shp)  
+  }
+  out.df <- cbind(sub.df,pred.causal.gene,shared.go.pathways,shared.hmdb.pathways)
+  out.df$pred.causal.gene <- out.df$pred.causal.gene %>% as.character(.)
+  out.df$shared.go.pathways <- out.df$shared.go.pathways %>% as.character(.)
+  out.df$shared.hmdb.pathways <- out.df$shared.hmdb.pathways %>% as.character(.)
+  out.df <- as.data.frame(out.df)
+  out.df$shared.hmdb.pathways[out.df$shared.hmdb.pathways == "character(0)"] = "NA"
+
+  out2.df <- c()
+  for (i in 1:dim(out.df)[1]){
+    sgp <- out.df$shared.go.pathways[i]
+    shp <- out.df$shared.hmdb.pathways[i]
+    if (sgp == "NA" & shp == "NA"){
+      pass = 0 
+    } else{
+      out2.df <- rbind(out2.df,out.df[i,])
+    }
+    
+  }
+  return(out2.df)
+}
+
+
+tab2.df <- make_table_2_df()
+
+#tab2.df$shared.hmdb.pathways <- gsub(",",",\n",tab2.df$shared.hmdb.pathways)
+
+#tab2.df$shared.go.pathways <- map(tab2.df$shared.go.pathways,function(s){
+#  vec <- strsplit(s,split=",")[[1]];sliced <- slice(vec,3)
+#  map(sliced,function(vec){paste(vec,collapse=", ")}) %>% unlist(.) %>% paste(.,collapse=",\n")
+#}) %>% as.character(.)
+#tab2.df$pred.causal.gene <- map(tab2.df$pred.causal.gene,function(s){
+#  vec <- strsplit(s,split=",")[[1]];sliced <- slice(vec,3)
+#  map(sliced,function(vec){paste(vec,collapse=", ")}) %>% unlist(.) %>% paste(.,collapse=",\n")
+#}) %>% as.character(.)
+tab2.df$Tissue <- gsub("_","-",tab2.df$Tissue)
+
+write.table(tab2.df,output.dir%&%"novel_genes_sharing_pathways_with_known.txt",sep="\t",quote=FALSE,row.names=TRUE)
+
+
+#grob <- tableGrob(tab2.df)
+#grid.draw(grob)
+#grid.newpage()
+
+#grobA <- tableGrob(tab2.df[1:39,])
+#grobB <- tableGrob(tab2.df[40:55,])
+#grobC <- tableGrob(tab2.df[56:78,])
+
+#grid.draw(grobA)
+#grid.newpage()
+#grid.draw(grobB)
+#grid.newpage()
+#grid.draw(grobC)
+#grid.newpage()
+# Top half 
+
+```
+
+
+
+
 
