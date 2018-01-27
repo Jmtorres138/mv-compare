@@ -18,9 +18,8 @@ knitr::opts_chunk$set(echo = TRUE)
 
 library("data.table")
 library("tidyverse")
-#library("Homo.sapiens")
-#library(gridExtra)
-#library(grid)
+library("gridExtra")
+library("grid")
 
 server.dir <- "/Users/jtorres/FUSE/"
 
@@ -61,7 +60,8 @@ make_metab_df <- function(){
     build.df <- data.frame(metabolite=metab,predicted_causal=pcg,MetaboID=mid,stringsAsFactors = FALSE)
     out.df <- rbind(out.df,build.df)
   }
-  out.df <- filter(out.df,!(grepl("/",metabolite)),!grepl("X-",metabolite),predicted_causal!="unknown")
+  out.df <- filter(out.df,!(grepl("/",metabolite)),!grepl("X-",metabolite),predicted_causal!="unknown",predicted_causal!="")
+  ##out.df <- filter(out.df,!grepl("X-",metabolite),predicted_causal!="unknown",predicted_causal!="")
   out.df$MetaboID[out.df$metabolite=="Alpha-hydroxyisovalerate"] <- "M33937"
   out.df$metabolite[out.df$metabolite=="Alpha-hydroxyisovalerate"] <- "alpha-hydroxyisovalerate"
   out.df$MetaboID[out.df$metabolite=="Serine"] <- "M32315"
@@ -94,13 +94,17 @@ mtxn.df$hmdb <- map(mtxn.df$gene_name,function(g){g %in% hmdb.df$gene_name}) %>%
 
 sub <- select(mtxn.df,one_of("gene_name","known","hmdb")); sub <- sub[!duplicated(sub),]
 
-dim(filter(sub,known==TRUE,hmdb==FALSE))[1] # 5 known genes not in HMDB 
-dim(filter(sub,known==TRUE,hmdb==TRUE))[1] # 36 known genes in HMDB
+dim(filter(sub,known==TRUE,hmdb==FALSE))[1] # 0 known genes not in HMDB 
+dim(filter(sub,known==TRUE,hmdb==TRUE))[1] # 28 known genes in HMDB
+
+sum(metab.df$predicted_causal %in% hmdb.df$gene_name)
+metab.df$predicted_causal[!(metab.df$predicted_causal%in% hmdb.df$gene_name)]
+
 
 novel.df <- filter(sub,known==FALSE,hmdb==TRUE)
 
 # 27% of novel gene associations are in hmdb 
-dim(filter(sub,known==FALSE,hmdb==TRUE))[1]/dim(filter(sub,known==FALSE))[1] # 0.2733711
+dim(filter(sub,known==FALSE,hmdb==TRUE))[1]/dim(filter(sub,known==FALSE))[1] # 0.2742616
 
 ```
 
@@ -213,41 +217,14 @@ full.df <- build_full_metab_df(alt=TRUE)
 
 
 
-# Summary 
-
-```{r}
-
-# 26% of novel gene associations are in hmdb 
-dim(filter(sub,known==FALSE,hmdb==TRUE))[1]/dim(filter(sub,known==FALSE))[1] # 0.2647482
-
-m.vec <- full.df$Metabolite %>% unique(.)
-log.vec <- map(m.vec,function(m){dim(filter(full.df,Metabolite==m,Group=="known"))[1]>0}) %>% as.logical(.)
-keep.metabs <- m.vec[log.vec]
-
-nov.df <- filter(full.df,Group=="novel",Metabolite %in% keep.metabs)
-path.count = 0 
-go.count = 0 
-for (g in unique(nov.df$Gene)){
-  g.df <- filter(nov.df,Gene==g)
-  path.count <- path.count + as.integer(any(g.df$path.shared.known == TRUE))
-  go.count <- go.count + as.integer(any(g.df$go.shared.known == TRUE))
-}
-
-path.count / length(unique(nov.df$Gene)) # 5% of novel genes are in the same hmdb pathways as the known genes associated with metab
-go.count / length(unique(nov.df$Gene)) # % 4% of novel genes are in the same go pathways as the known genes associated with metab
-
-```
-
-
-
 # Make results tables 
 
 ## Table 1: Profile of MetaXcan results for known metabolite genes
 
 ```{r}
 
-library(gridExtra)
-library(grid)
+#library(gridExtra)
+#library(grid)
 
 make_table_1 <- function(){
   pb <- txtProgressBar(min=0,max=dim(metab.df)[1],style=3)
@@ -284,12 +261,16 @@ make_table_1 <- function(){
   out.df <- arrange(out.df,desc(num.tissues))
   names(out.df) <- c("Metabolite ID","Metabolite Name","Causal Gene","Number of Gene\n Associations","Most Significant\nTissue","q-value")
   
-  #test.df <- out.df[1:10,]
-  #grob <- tableGrob(out.df)
-  #grid.draw(grob)
-  #grid.newpage()
+  tt3 <- ttheme_minimal(
+    core=list(bg_params = list(fill = blues9[1:2], col=NA),
+            fg_params=list(fontface=3)),
+    colhead=list(fg_params=list(col="navyblue", fontface=4L)),
+    rowhead=list(fg_params=list(col="white", fontface=3L)))
   noNA.df <- na.omit(out.df)
-  grob2 <- tableGrob(noNA.df)
+  noNA.df$`q-value` <- map(noNA.df$`q-value`, function(n){signif(n,3)}) %>% as.numeric(.)
+  grob2 <- tableGrob(noNA.df,theme=tt3)
+  
+  
   grid.draw(grob2)  
   
 }
@@ -397,25 +378,42 @@ tab2.df$Tissue <- gsub("_","-",tab2.df$Tissue)
 write.table(tab2.df,output.dir%&%"novel_genes_sharing_pathways_with_known.txt",sep="\t",quote=FALSE,row.names=TRUE)
 
 
-#grob <- tableGrob(tab2.df)
-#grid.draw(grob)
-#grid.newpage()
+tab2.df$shared.go.pathways <- map(tab2.df$shared.go.pathways,function(s){
+  vec <- strsplit(s,split=",")[[1]] 
+  vec <- vec[vec !="NA"] 
+  vec %>% length(.)}) %>% as.integer(.)
+tab2.df$shared.hmdb.pathways <- map(tab2.df$shared.hmdb.pathways,function(s){
+  vec <- strsplit(s,split=",")[[1]] 
+  vec <- vec[vec !="NA"] 
+  vec %>% length(.)}) %>% as.integer(.)
 
-#grobA <- tableGrob(tab2.df[1:39,])
-#grobB <- tableGrob(tab2.df[40:55,])
-#grobC <- tableGrob(tab2.df[56:78,])
+tab2.df <- arrange(tab2.df,metabolite)
 
-#grid.draw(grobA)
-#grid.newpage()
-#grid.draw(grobB)
-#grid.newpage()
-#grid.draw(grobC)
-#grid.newpage()
-# Top half 
+  tt3 <- ttheme_minimal(
+    core=list(bg_params = list(fill = blues9[1:2], col=NA),
+            fg_params=list(fontface=3)),
+    colhead=list(fg_params=list(col="navyblue", fontface=4L)),
+    rowhead=list(fg_params=list(col="white", fontface=3L)))
+  tab2.df$zscore <- map(tab2.df$zscore, function(n){signif(n,3)}) %>% as.numeric(.)
+  tab2.df$pvalue <- map(tab2.df$pvalue, function(n){signif(n,3)}) %>% as.numeric(.)
+  tab2.df$FDR_studywide <- map(tab2.df$FDR_studywide, function(n){signif(n,3)}) %>% as.numeric(.)
 
+  tabgrob <- tableGrob(tab2.df,theme=tt3)
+  grid.draw(tabgrob)
 ```
 
 
+# Summary 
+
+```{r}
+
+numer <- (filter(sub,known==FALSE,hmdb==TRUE)$gene_name %>% unique(.) %>% length(.)) 
+denom <- filter(sub,known==FALSE)$gene_name %>% unique(.) %>% length(.)
+num.nov.hmdb <- numer/denom # 0.2742616
+
+numer <- tab2.df$gene_name %>% unique(.) %>% length(.)
+num.nov.sharepath <- numer/denom # 0.039 or 4% 
+```
 
 
 
