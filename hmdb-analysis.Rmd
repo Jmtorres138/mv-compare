@@ -45,70 +45,105 @@ Prepare updated metab.df
 
 ```{r}
 
-s2.df <- fread(input.dir %&% "shin_supplemetary_tables_tableS2_3cols.txt") #%>% dplyr::select(.,one_of("V2","V3")) %>% as.data.frame(.)
-s6.df <- fread(input.dir %&% "shin_supplemetary_tables_tableS6.txt")
+#s2.df <- fread(input.dir %&% "shin_supplemetary_tables_tableS2_3cols.txt") #%>% dplyr::select(.,one_of("V2","V3")) %>% as.data.frame(.)
+#s6.df <- fread(input.dir %&% "shin_supplemetary_tables_tableS6.txt")
 
-make_metab_df <- function(){
-  sub.df <- dplyr::select(s6.df,one_of("Most associated metabolite or ratio","Predicted causal gene"))
-  sub.df <- sub.df[!duplicated(sub.df),] %>% as.data.frame(.)
-  pb <- txtProgressBar(min=0,max=dim(sub.df)[1],style=3)
-  out.df <- c()
-  for (i in 1:dim(sub.df)[1]){
-    setTxtProgressBar(pb,i)
-    metab <- sub.df$`Most associated metabolite or ratio`[i] 
-    pcg <- sub.df$`Predicted causal gene`[i]
-    #mid <- ifelse(length(filter(s2.df,V3==metab)$V2)==0,NA,filter(s2.df,V3==metab)$V2)
-    mid <- ifelse(length(filter(s2.df,Status==metab)$`Metabolite`)==0,NA,filter(s2.df,Status==metab)$`Metabolite`)
+#make_metab_df <- function(){
+#  sub.df <- dplyr::select(s6.df,one_of("Most associated metabolite or ratio","Predicted causal gene"))
+#  sub.df <- sub.df[!duplicated(sub.df),] %>% as.data.frame(.)
+#  pb <- txtProgressBar(min=0,max=dim(sub.df)[1],style=3)
+#  out.df <- c()
+#  for (i in 1:dim(sub.df)[1]){
+#    setTxtProgressBar(pb,i)
+#    metab <- sub.df$`Most associated metabolite or ratio`[i] 
+#    pcg <- sub.df$`Predicted causal gene`[i]
+#    #mid <- ifelse(length(filter(s2.df,V3==metab)$V2)==0,NA,filter(s2.df,V3==metab)$V2)
+#    mid <- ifelse(length(filter(s2.df,Status==metab)$`Metabolite`)==0,NA,filter(s2.df,Status==metab)$`Metabolite`)
+#    build.df <- data.frame(metabolite=metab,predicted_causal=pcg,MetaboID=mid,stringsAsFactors = FALSE)
+#    out.df <- rbind(out.df,build.df)
+#  }
+#  out.df <- filter(out.df,!(grepl("/",metabolite)),!grepl("X-",metabolite),predicted_causal!="unknown",predicted_causal!="")
+#  ##out.df <- filter(out.df,!grepl("X-",metabolite),predicted_causal!="unknown",predicted_causal!="")
+#  out.df$MetaboID[out.df$metabolite=="Alpha-hydroxyisovalerate"] <- "M33937"
+#  out.df$metabolite[out.df$metabolite=="Alpha-hydroxyisovalerate"] <- "alpha-hydroxyisovalerate"
+#  out.df$MetaboID[out.df$metabolite=="Serine"] <- "M32315"
+#  out.df$metabolite[out.df$metabolite=="Serine"] <- "serine"
+#  out.df$MetaboID[out.df$metabolite=="1-palmitoylglycero-phosphoethanolamine"] <- "M35631"
+#  out.df$metabolite[out.df$metabolite=="1-palmitoylglycero-phosphoethanolamine"] <- "1-palmitoylglycerophosphoethanolamine"
+#  out.df$MetaboID[out.df$metabolite=="HWESASXX"] <- "M32836"
+#  out.df <- out.df[!duplicated(out.df),]
+#}
 
-    build.df <- data.frame(metabolite=metab,predicted_causal=pcg,MetaboID=mid,stringsAsFactors = FALSE)
-    out.df <- rbind(out.df,build.df)
-  }
-  out.df <- filter(out.df,!(grepl("/",metabolite)),!grepl("X-",metabolite),predicted_causal!="unknown",predicted_causal!="")
-  ##out.df <- filter(out.df,!grepl("X-",metabolite),predicted_causal!="unknown",predicted_causal!="")
-  out.df$MetaboID[out.df$metabolite=="Alpha-hydroxyisovalerate"] <- "M33937"
-  out.df$metabolite[out.df$metabolite=="Alpha-hydroxyisovalerate"] <- "alpha-hydroxyisovalerate"
-  out.df$MetaboID[out.df$metabolite=="Serine"] <- "M32315"
-  out.df$metabolite[out.df$metabolite=="Serine"] <- "serine"
-  out.df$MetaboID[out.df$metabolite=="1-palmitoylglycero-phosphoethanolamine"] <- "M35631"
-  out.df$metabolite[out.df$metabolite=="1-palmitoylglycero-phosphoethanolamine"] <- "1-palmitoylglycerophosphoethanolamine"
-  out.df$MetaboID[out.df$metabolite=="HWESASXX"] <- "M32836"
-  out.df <- out.df[!duplicated(out.df),]
-}
-
-metab.df <- make_metab_df()
+#metab.df <- make_metab_df()
 
 
 ```
 
 
 
+```{r}
+
+metab.df <- fread(input.dir %&% "metabolite_GWAS_genes_from-Anne.txt")
+names(metab.df) <- c("gene_name","metabolite","MetaboID","predicted_causal")
+
+
+```
+
 
 
 ```{r}
 
 
-mtxn.df$known <- map(1:dim(mtxn.df)[1],function(i){
+mtxn.df$predicted_causal <- map(1:dim(mtxn.df)[1],function(i){
   m <- mtxn.df$metabolite[i]
   g <- mtxn.df$gene_name[i]
-  g %in% filter(metab.df,MetaboID==m)$predicted_causal
-  }) %>% 
-  as.logical(.)
+  val <- filter(metab.df,gene_name==g,predicted_causal!="unknown",MetaboID==m)$predicted_causal # g %in% 
+  ifelse(length(val)>0,val,"-")
+  }) %>% as.character(.)
+  #as.logical(.)
+
+mtxn.df$gwas.unknown <- map(1:dim(mtxn.df)[1],function(i){
+  m <- mtxn.df$metabolite[i]
+  g <- mtxn.df$gene_name[i]
+  val <- filter(metab.df,gene_name==g,predicted_causal=="unknown",MetaboID==m)$gene_name # g %in% 
+  ifelse(length(val)>0,val,"-")
+  }) %>% as.character(.)
+  #as.logical(.)
+
 mtxn.df$hmdb <- map(mtxn.df$gene_name,function(g){g %in% hmdb.df$gene_name}) %>% 
   as.logical(.)
 
-sub <- dplyr::select(mtxn.df,one_of("gene_name","known","hmdb")); sub <- sub[!duplicated(sub),]
-
-dim(filter(sub,known==TRUE,hmdb==FALSE))[1] # 0 known genes not in HMDB 
-dim(filter(sub,known==TRUE,hmdb==TRUE))[1] # 28 known genes in HMDB
-
-sum(metab.df$predicted_causal %in% hmdb.df$gene_name)
-metab.df$predicted_causal[!(metab.df$predicted_causal%in% hmdb.df$gene_name)]
+sub <- dplyr::select(mtxn.df,one_of("gene_name","metabolite","predicted_causal","gwas.unknown","hmdb")); sub <- sub[!duplicated(sub),]
+dim(sub) # 826 
 
 
-novel.df <- filter(sub,known==FALSE,hmdb==TRUE)
 
-# 27% of novel gene associations are in hmdb 
-dim(filter(sub,known==FALSE,hmdb==TRUE))[1]/dim(filter(sub,known==FALSE))[1] # 0.2742616
+dim(filter(sub,gene_name==predicted_causal,hmdb==FALSE))[1] # 1 predicted causal gene, SLC16A9 (for M15500 and M32412) not in HMDB
+filter(sub,gene_name==predicted_causal,hmdb==TRUE)$gene_name %>% unique(.) %>% length(.) # 34 known genes in HMDB
+dim(filter(sub,gene_name==gwas.unknown,hmdb==FALSE))[1] #  6 of the gwas unknown genes are NOT in HMDB
+filter(sub,gene_name==gwas.unknown,hmdb==TRUE)$gene_name %>% unique(.) %>% length(.) # 4 of the gwas unknown genes are in HMDB
+
+
+#sum(metab.df$predicted_causal %in% hmdb.df$gene_name)
+#metab.df$predicted_causal[!(metab.df$predicted_causal%in% hmdb.df$gene_name)]
+
+
+novel.df <- filter(sub,predicted_causal==FALSE,hmdb==TRUE)
+
+
+filter(sub,gene_name!=predicted_causal) %>% dim(.) # 785 (704 genes) novel gene/metabolite pairs 
+#filter(sub,gene_name!=predicted_causal)$gene_name %>% unique(.) %>% length(.)
+filter(sub,gene_name!=predicted_causal,hmdb==TRUE) %>% dim(.) # 212 (189 genes) of the novel gene/metabolite pairs are in HMDB
+# 212/785 = 27%, 189/704 = 0.268
+#filter(sub,gene_name!=predicted_causal,hmdb==TRUE)$gene_name %>% unique(.) %>% length(.) # 
+filter(sub,gene_name!=predicted_causal,gene_name==gwas.unknown,hmdb==TRUE) %>% dim(.) # 4 pairs of which (corresponding to 4 unique genes) are in HMDB and are gwas.unknown 
+
+
+
+
+dim(filter(metab.df,predicted_causal!="unknown"))[1] # 61
+dim(filter(metab.df,predicted_causal=="unknown"))[1] # 18
+
 
 ```
 
