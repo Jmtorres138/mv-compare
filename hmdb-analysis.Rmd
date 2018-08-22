@@ -21,7 +21,7 @@ library("tidyverse")
 library("gridExtra")
 library("grid")
 
-server.dir <- "/Users/jtorres/FUSE/"
+server.dir <- "/home/jason/science/servers/FUSE/"
 
 work.dir <- server.dir %&% "projects/mv-compare/"
 input.dir <- work.dir %&% "input_files/"
@@ -35,6 +35,7 @@ plot.dir <- work.dir %&% "plots/"
 mtxn.df <- fread(input.dir %&% "metaxcan_full_results_filtered_for_model_fit_and_pval_at_0.01.txt")
 
 hmdb.df <- fread(work.dir %&% "hmdb/hmdb.txt")
+#causal.df <- fread(input.dir %&% "causal_genes3.txt")
 
 ```
 
@@ -44,7 +45,7 @@ Prepare updated metab.df
 
 ```{r}
 
-s2.df <- fread(input.dir %&% "shin_supplemetary_tables_tableS2.txt") %>% dplyr::select(.,one_of("V2","V3")) %>% as.data.frame(.)
+s2.df <- fread(input.dir %&% "shin_supplemetary_tables_tableS2_3cols.txt") #%>% dplyr::select(.,one_of("V2","V3")) %>% as.data.frame(.)
 s6.df <- fread(input.dir %&% "shin_supplemetary_tables_tableS6.txt")
 
 make_metab_df <- function(){
@@ -56,7 +57,9 @@ make_metab_df <- function(){
     setTxtProgressBar(pb,i)
     metab <- sub.df$`Most associated metabolite or ratio`[i] 
     pcg <- sub.df$`Predicted causal gene`[i]
-    mid <- ifelse(length(filter(s2.df,V3==metab)$V2)==0,NA,filter(s2.df,V3==metab)$V2)
+    #mid <- ifelse(length(filter(s2.df,V3==metab)$V2)==0,NA,filter(s2.df,V3==metab)$V2)
+    mid <- ifelse(length(filter(s2.df,Status==metab)$`Metabolite`)==0,NA,filter(s2.df,Status==metab)$`Metabolite`)
+
     build.df <- data.frame(metabolite=metab,predicted_causal=pcg,MetaboID=mid,stringsAsFactors = FALSE)
     out.df <- rbind(out.df,build.df)
   }
@@ -87,12 +90,13 @@ metab.df <- make_metab_df()
 mtxn.df$known <- map(1:dim(mtxn.df)[1],function(i){
   m <- mtxn.df$metabolite[i]
   g <- mtxn.df$gene_name[i]
-  g %in% filter(metab.df,MetaboID==m)$predicted_causal}) %>% 
+  g %in% filter(metab.df,MetaboID==m)$predicted_causal
+  }) %>% 
   as.logical(.)
 mtxn.df$hmdb <- map(mtxn.df$gene_name,function(g){g %in% hmdb.df$gene_name}) %>% 
   as.logical(.)
 
-sub <- select(mtxn.df,one_of("gene_name","known","hmdb")); sub <- sub[!duplicated(sub),]
+sub <- dplyr::select(mtxn.df,one_of("gene_name","known","hmdb")); sub <- sub[!duplicated(sub),]
 
 dim(filter(sub,known==TRUE,hmdb==FALSE))[1] # 0 known genes not in HMDB 
 dim(filter(sub,known==TRUE,hmdb==TRUE))[1] # 28 known genes in HMDB
@@ -363,16 +367,6 @@ make_table_2_df  <- function(){
 
 tab2.df <- make_table_2_df()
 
-#tab2.df$shared.hmdb.pathways <- gsub(",",",\n",tab2.df$shared.hmdb.pathways)
-
-#tab2.df$shared.go.pathways <- map(tab2.df$shared.go.pathways,function(s){
-#  vec <- strsplit(s,split=",")[[1]];sliced <- slice(vec,3)
-#  map(sliced,function(vec){paste(vec,collapse=", ")}) %>% unlist(.) %>% paste(.,collapse=",\n")
-#}) %>% as.character(.)
-#tab2.df$pred.causal.gene <- map(tab2.df$pred.causal.gene,function(s){
-#  vec <- strsplit(s,split=",")[[1]];sliced <- slice(vec,3)
-#  map(sliced,function(vec){paste(vec,collapse=", ")}) %>% unlist(.) %>% paste(.,collapse=",\n")
-#}) %>% as.character(.)
 tab2.df$Tissue <- gsub("_","-",tab2.df$Tissue)
 
 write.table(tab2.df,output.dir%&%"novel_genes_sharing_pathways_with_known.txt",sep="\t",quote=FALSE,row.names=TRUE)

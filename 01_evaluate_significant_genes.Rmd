@@ -18,7 +18,7 @@ library("data.table")
 library("dplyr")
 library("Homo.sapiens")
 
-server.dir <- "/Users/jtorres/FUSE/"
+server.dir <- "/home/jason/science/servers/FUSE/"
 work.dir <- server.dir %&% "projects/mv-compare/"
 input.dir <- work.dir %&% "input_files/"
 sig.results.file <- input.dir %&% "metaxcan_full_results_0.01_only.txt"
@@ -74,6 +74,7 @@ build_sig_go_df <- function(){
 sig.go.df <- build_sig_go_df()
 sig.go.df$gene_name <- as.character(sig.go.df$gene_name)
 saveRDS(sig.go.df,work.dir%&%"sig.go.df.RDS")
+#sig.go.df <- readRDS(work.dir%&%"sig.go.df.RDS")
 
 
 ```

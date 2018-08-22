@@ -22,7 +22,7 @@ library("ggplot2")
 library(gridExtra)
 library(grid)
 
-server.dir <- "/Users/jtorres/FUSE/"
+server.dir <- "/home/jason/science/servers/FUSE/"
 
 work.dir <- server.dir %&% "projects/mv-compare/"
 input.dir <- work.dir %&% "input_files/"
@@ -96,7 +96,7 @@ Build result data frame
 
 
 build_res_df <- function(){
-  file.vec <- list.files(output.dir)
+  file.vec <- list.files(output.dir)[grepl("M",list.files(output.dir))]
   out.df <- c()
   pb <- txtProgressBar(min=0,max=length(file.vec),style=3)
   for (i in 1:length(file.vec)){
