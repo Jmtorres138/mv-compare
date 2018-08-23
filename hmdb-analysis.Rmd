@@ -85,6 +85,7 @@ Prepare updated metab.df
 
 metab.df <- fread(input.dir %&% "metabolite_GWAS_genes_from-Anne.txt")
 names(metab.df) <- c("gene_name","metabolite","MetaboID","predicted_causal")
+# 58:   SLC22A2                   isobutyrylcarnitine   M33441          SLC22A1 # ask Anne for clarification
 
 
 ```
@@ -137,7 +138,10 @@ filter(sub,gene_name!=predicted_causal,hmdb==TRUE) %>% dim(.) # 212 (189 genes) 
 # 212/785 = 27%, 189/704 = 0.268
 #filter(sub,gene_name!=predicted_causal,hmdb==TRUE)$gene_name %>% unique(.) %>% length(.) # 
 filter(sub,gene_name!=predicted_causal,gene_name==gwas.unknown,hmdb==TRUE) %>% dim(.) # 4 pairs of which (corresponding to 4 unique genes) are in HMDB and are gwas.unknown 
-
+#      ANKH     M01564                -         ANKH TRUE
+#     ACSM5     M15749                -        ACSM5 TRUE
+#  RAB3GAP1     M20675                -     RAB3GAP1 TRUE
+#     ABCC1     M37058                -        ABCC1 TRUE
 
 
 
@@ -265,17 +269,26 @@ full.df <- build_full_metab_df(alt=TRUE)
 #library(gridExtra)
 #library(grid)
 
-make_table_1 <- function(){
-  pb <- txtProgressBar(min=0,max=dim(metab.df)[1],style=3)
+make_table_1 <- function(type="predicted_causal"){
+  if (type=="predicted_causal"){
+    m.df=filter(metab.df,predicted_causal!="unknown")
+  } else{
+    m.df=filter(metab.df,predicted_causal=="unknown")
+  }
+  pb <- txtProgressBar(min=0,max=dim(m.df)[1],style=3)
   top.q <- c()
   top.tissue <- c()
   num.tissues <- c()
   
-  for (i in 1:dim(metab.df)[1]){
+  for (i in 1:dim(m.df)[1]){
     setTxtProgressBar(pb,i)
-    metab <- metab.df$metabolite[i]
-    g <- metab.df$predicted_causal[i]
-    id <- metab.df$MetaboID[i]
+    metab <- m.df$metabolite[i]
+    if (type=="predicted_causal"){
+      g <- m.df$predicted_causal[i]
+    } else{
+      g <- m.df$gene_name[i]
+    }
+    id <- m.df$MetaboID[i]
     sub <- filter(mtxn.df,gene_name==g,metabolite_name==metab) %>% arrange(FDR_studywide)
     
     if (dim(sub)[1]==0){
@@ -292,13 +305,13 @@ make_table_1 <- function(){
     top.tissue <- append(top.tissue,toptiss)
     num.tissues <- append(num.tissues,numtiss)
   }
-  out.df <- dplyr::select(metab.df,one_of("MetaboID","metabolite","predicted_causal")) %>% as.data.frame(.)
+  out.df <- dplyr::select(m.df,one_of("MetaboID","metabolite","gene_name","predicted_causal")) %>% as.data.frame(.)
   out.df$number.mtxn.assoc <- num.tissues
   out.df$most.sig.tissue <- top.tissue %>% as.character(.)
   out.df$most.sig.tissue <- gsub("_","-",out.df$most.sig.tissue)
   out.df$most.siq.qvalue <- top.q
   out.df <- arrange(out.df,desc(num.tissues))
-  names(out.df) <- c("Metabolite ID","Metabolite Name","Causal Gene","Number of Gene\n Associations","Most Significant\nTissue","q-value")
+  names(out.df) <- c("Metabolite ID","Metabolite Name","Associated Gene","Causal Gene","Number of Gene\n Associations","Most Significant\nTissue","q-value")
   
   tt3 <- ttheme_minimal(
     core=list(bg_params = list(fill = blues9[1:2], col=NA),
@@ -309,13 +322,42 @@ make_table_1 <- function(){
   noNA.df$`q-value` <- map(noNA.df$`q-value`, function(n){signif(n,3)}) %>% as.numeric(.)
   grob2 <- tableGrob(noNA.df,theme=tt3)
   
-  
-  grid.draw(grob2)  
+  return(list(out.df,noNA.df,grob2))
   
 }
 
 
 ```
+
+
+
+```{r}
+
+p1.list <- make_table_1()
+
+dim(p1.list[[1]])[1] # there are 61 predicted causal gene/metabolite pairs 
+dim(p1.list[[2]])[1] # 42 are supported by S-PrediXcan; 68% (0.6885246)
+
+grid.draw(p1.list[[3]])
+
+sum(p1.list[[2]]$`Number of Gene
+ Associations` == 1) # 9 
+sum(p1.list[[2]]$`Number of Gene
+ Associations` > 1) # 33
+
+# save file as known-plot1.png 
+
+p1b.list <- make_table_1(type="unknown")
+dim(p1b.list[[1]])[1] # 18 unknown gene / pairs 
+dim(p1b.list[[2]])[1] # 10 are supported by MetaXcan 
+grid.draw(p1b.list[[3]])
+
+# save file as unknown-plot1.png 
+
+
+```
+
+
 
 
 ## Table 2: Profile of novel Metaxcan genes, for those that are annotated to same metabolic pathway as known metabolite genes, to what extent are they significant?
@@ -334,8 +376,11 @@ make_table_2_df  <- function(){
   
   
   # Subset to novel genes annotated in hmdb pathways 
-  sub.df <- filter(mtxn.df,known==FALSE,hmdb==TRUE,metabolite%in%metab.df$MetaboID) %>% dplyr::select(one_of("gene","gene_name","metabolite","metabolite_name",
-                                                                  "Tissue","zscore","pvalue","FDR_studywide"))
+  sub.df <- filter(mtxn.df,predicted_causal=="-",hmdb==TRUE,
+                   metabolite%in%filter(metab.df,predicted_causal!="unknown")$MetaboID) %>% dplyr::select(one_of("gene","gene_name","metabolite","metabolite_name",
+                     "Tissue","zscore","pvalue","FDR_studywide")) # 628 S-PrediXcan associations involve novel genes associated with metabolites with predicted causal genes 
+ # t <- dplyr::select(sub.df,one_of("gene_name","metabolite")); t <- t[!duplicated(t),]
+ # corresponding to 188 unique gene/metabolite pairs and 173 unique genes 
   pred.causal.gene <- c()
   shared.go.pathways <- c()
   shared.hmdb.pathways <- c() 
@@ -400,6 +445,11 @@ make_table_2_df  <- function(){
 }
 
 
+```
+
+
+```{r}
+
 tab2.df <- make_table_2_df()
 
 tab2.df$Tissue <- gsub("_","-",tab2.df$Tissue)
@@ -418,31 +468,57 @@ tab2.df$shared.hmdb.pathways <- map(tab2.df$shared.hmdb.pathways,function(s){
 
 tab2.df <- arrange(tab2.df,metabolite)
 
-  tt3 <- ttheme_minimal(
-    core=list(bg_params = list(fill = blues9[1:2], col=NA),
-            fg_params=list(fontface=3)),
-    colhead=list(fg_params=list(col="navyblue", fontface=4L)),
-    rowhead=list(fg_params=list(col="white", fontface=3L)))
-  tab2.df$zscore <- map(tab2.df$zscore, function(n){signif(n,3)}) %>% as.numeric(.)
-  tab2.df$pvalue <- map(tab2.df$pvalue, function(n){signif(n,3)}) %>% as.numeric(.)
-  tab2.df$FDR_studywide <- map(tab2.df$FDR_studywide, function(n){signif(n,3)}) %>% as.numeric(.)
+tt3 <- ttheme_minimal(
+  core=list(bg_params = list(fill = blues9[1:2], col=NA),
+          fg_params=list(fontface=3)),
+  colhead=list(fg_params=list(col="navyblue", fontface=4L)),
+  rowhead=list(fg_params=list(col="white", fontface=3L)))
+tab2.df$zscore <- map(tab2.df$zscore, function(n){signif(n,3)}) %>% as.numeric(.)
+tab2.df$pvalue <- map(tab2.df$pvalue, function(n){signif(n,3)}) %>% as.numeric(.)
+tab2.df$FDR_studywide <- map(tab2.df$FDR_studywide, function(n){signif(n,3)}) %>% as.numeric(.)
 
-  tabgrob <- tableGrob(tab2.df,theme=tt3)
-  grid.draw(tabgrob)
+tabgrob <- tableGrob(tab2.df,theme=tt3)
+grid.draw(tabgrob)
+  
+# novel.png
+    
 ```
+
+
+```{r}
+
+dim(tab2.df)[1] # 57 associations involve novel genes that share the same metabolic pathway as a predicted_causal gene for that metabolite 
+t <- dplyr::select(tab2.df,one_of("gene_name","metabolite")); t<-t[!duplicated(t),]
+dim(t)[1] # corresponding to 24 unique gene/metabolite pairs and 
+t$gene_name %>% unique(.) %>% length(.) # 24 unique genes 
+
+```
+
 
 
 # Summary 
 
 ```{r}
 
-numer <- (filter(sub,known==FALSE,hmdb==TRUE)$gene_name %>% unique(.) %>% length(.)) 
-denom <- filter(sub,known==FALSE)$gene_name %>% unique(.) %>% length(.)
-num.nov.hmdb <- numer/denom # 0.2742616
+#numer <- (filter(sub,known==FALSE,hmdb==TRUE)$gene_name %>% unique(.) %>% length(.)) 
+#denom <- filter(sub,known==FALSE)$gene_name %>% unique(.) %>% length(.)
+#num.nov.hmdb <- numer/denom # 0.2742616
 
-numer <- tab2.df$gene_name %>% unique(.) %>% length(.)
-num.nov.sharepath <- numer/denom # 0.039 or 4% 
+#numer <- tab2.df$gene_name %>% unique(.) %>% length(.)
+#num.nov.sharepath <- numer/denom # 0.039 or 4% 
 ```
 
+
+#628 S-PrediXcan associations involve novel genes associated with metabolites with predicted causal genes, corresponding to 188 unique gene/metabolite pairs, and 173 unique genes 
+#57 associations involve novel genes that share the same metabolic pathway as a predicted_causal gene for that metabolite, corresponding to 24 unique gene/metabolite pairs and  24 unique genes 
+
+#1 predicted causal gene, SLC16A9 (for M15500 and M32412) not in HMDB
+#34 known genes in HMDB
+#6 of the gwas unknown genes are NOT in HMDB
+#4 of the gwas unknown genes are in HMDB
+#785 (704 genes) novel gene/metabolite pairs 
+#212 (189 genes) of the novel gene/metabolite pairs are in HMDB
+#( 212/785 = 27%, 189/704 = 0.268)
+#4 pairs of which (corresponding to 4 unique genes) are in HMDB and are gwas.unknown 
 
 
