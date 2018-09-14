@@ -339,6 +339,9 @@ dim(p1.list[[1]])[1] # there are 61 predicted causal gene/metabolite pairs
 dim(p1.list[[2]])[1] # 42 are supported by S-PrediXcan; 68% (0.6885246)
 
 grid.draw(p1.list[[3]])
+names(p1.list[[2]]) <- c("Metabolite ID","Metabolite Name","Associated Gene","Causal Gene",
+                         "Number of Gene Associations","Most Significant Tissue","q-value")
+write.csv(x=p1.list[[2]],file=output.dir%&%"table1-hmdb.csv",quote=F,row.names=F)
 
 sum(p1.list[[2]]$`Number of Gene
  Associations` == 1) # 9 
@@ -353,6 +356,9 @@ dim(p1b.list[[2]])[1] # 10 are supported by MetaXcan
 grid.draw(p1b.list[[3]])
 
 # save file as unknown-plot1.png 
+names(p1b.list[[2]]) <- c("Metabolite ID","Metabolite Name","Associated Gene","Causal Gene",
+                         "Number of Gene Associations","Most Significant Tissue","q-value")
+write.csv(x=p1b.list[[2]],file=output.dir%&%"table2-hmdb.csv",quote=F,row.names=F)
 
 
 ```
@@ -481,7 +487,8 @@ tabgrob <- tableGrob(tab2.df,theme=tt3)
 grid.draw(tabgrob)
   
 # novel.png
-    
+write.csv(x=tab2.df,file=output.dir%&%"table3-hmdb.csv",quote=F,row.names=F)
+
 ```
 
 
