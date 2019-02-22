@@ -114,7 +114,8 @@ mtxn.df$gwas.unknown <- map(1:dim(mtxn.df)[1],function(i){
 mtxn.df$hmdb <- map(mtxn.df$gene_name,function(g){g %in% hmdb.df$gene_name}) %>% 
   as.logical(.)
 
-sub <- dplyr::select(mtxn.df,one_of("gene_name","metabolite","predicted_causal","gwas.unknown","hmdb")); sub <- sub[!duplicated(sub),]
+sub <- dplyr::select(mtxn.df,one_of("gene_name","metabolite","predicted_causal","gwas.unknown","hmdb"))
+sub <- sub[!duplicated(sub),]
 dim(sub) # 826 
 
 
@@ -382,8 +383,9 @@ make_table_2_df  <- function(){
   
   
   # Subset to novel genes annotated in hmdb pathways 
-  sub.df <- filter(mtxn.df,predicted_causal=="-",hmdb==TRUE,
-                   metabolite%in%filter(metab.df,predicted_causal!="unknown")$MetaboID) %>% dplyr::select(one_of("gene","gene_name","metabolite","metabolite_name",
+  sub.df <- filter(mtxn.df,predicted_causal=="-",hmdb==TRUE) %>% #,
+                   #metabolite%in%filter(metab.df,predicted_causal!="unknown")$MetaboID) %>% 
+    dplyr::select(one_of("gene","gene_name","metabolite","metabolite_name",
                      "Tissue","zscore","pvalue","FDR_studywide")) # 628 S-PrediXcan associations involve novel genes associated with metabolites with predicted causal genes 
  # t <- dplyr::select(sub.df,one_of("gene_name","metabolite")); t <- t[!duplicated(t),]
  # corresponding to 188 unique gene/metabolite pairs and 173 unique genes 
@@ -498,6 +500,9 @@ dim(tab2.df)[1] # 57 associations involve novel genes that share the same metabo
 t <- dplyr::select(tab2.df,one_of("gene_name","metabolite")); t<-t[!duplicated(t),]
 dim(t)[1] # corresponding to 24 unique gene/metabolite pairs and 
 t$gene_name %>% unique(.) %>% length(.) # 24 unique genes 
+
+
+write.table(x=t,file="/home/jason/Tempo/metabpath_shared_24.txt",sep="\t",row.names=F,quote=F)
 
 ```
 
