@@ -489,7 +489,8 @@ tabgrob <- tableGrob(tab2.df,theme=tt3)
 grid.draw(tabgrob)
   
 # novel.png
-write.csv(x=tab2.df,file=output.dir%&%"table3-hmdb.csv",quote=F,row.names=F)
+#write.csv(x=tab2.df,file=output.dir%&%"table3-hmdb.csv",quote=F,row.names=F)
+write.csv(x=tab2.df,file=output.dir%&%"SuppTable-hmdb.csv",quote=F,row.names=F)
 
 ```
 
