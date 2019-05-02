@@ -1,7 +1,7 @@
 ---
 title: "Untitled"
 author: "Jason Torres"
-date: "December 11, 2017"
+date: "April 2019"
 output: html_document
 ---
 
@@ -22,60 +22,32 @@ library("gridExtra")
 library("grid")
 
 server.dir <- "/home/jason/science/servers/FUSE/"
-
+server.dir2 <- "/home/jason/science/servers/FUSE5/"
 work.dir <- server.dir %&% "projects/mv-compare/"
+work.dir2 <- server.dir2 %&% "projects/mv-compare/"
+
 input.dir <- work.dir %&% "input_files/"
 output.dir <- work.dir %&% "output_files/"
 
-known.genefile <- input.dir %&% "causal_genes3.txt"
-metab.old.df <- fread(known.genefile)
+#known.genefile <- input.dir %&% "causal_genes3.txt"
+#known.df <- fread(known.genefile)
+#metab.old.df <- fread(known.genefile)
+
 plot.dir <- work.dir %&% "plots/"
 
 
 mtxn.df <- fread(input.dir %&% "metaxcan_full_results_filtered_for_model_fit_and_pval_at_0.01.txt")
-
 hmdb.df <- fread(work.dir %&% "hmdb/hmdb.txt")
-#causal.df <- fread(input.dir %&% "causal_genes3.txt")
 
 ```
 
 
-Prepare updated metab.df 
-
+Proximity annotation file 
 
 ```{r}
 
-#s2.df <- fread(input.dir %&% "shin_supplemetary_tables_tableS2_3cols.txt") #%>% dplyr::select(.,one_of("V2","V3")) %>% as.data.frame(.)
-#s6.df <- fread(input.dir %&% "shin_supplemetary_tables_tableS6.txt")
-
-#make_metab_df <- function(){
-#  sub.df <- dplyr::select(s6.df,one_of("Most associated metabolite or ratio","Predicted causal gene"))
-#  sub.df <- sub.df[!duplicated(sub.df),] %>% as.data.frame(.)
-#  pb <- txtProgressBar(min=0,max=dim(sub.df)[1],style=3)
-#  out.df <- c()
-#  for (i in 1:dim(sub.df)[1]){
-#    setTxtProgressBar(pb,i)
-#    metab <- sub.df$`Most associated metabolite or ratio`[i] 
-#    pcg <- sub.df$`Predicted causal gene`[i]
-#    #mid <- ifelse(length(filter(s2.df,V3==metab)$V2)==0,NA,filter(s2.df,V3==metab)$V2)
-#    mid <- ifelse(length(filter(s2.df,Status==metab)$`Metabolite`)==0,NA,filter(s2.df,Status==metab)$`Metabolite`)
-#    build.df <- data.frame(metabolite=metab,predicted_causal=pcg,MetaboID=mid,stringsAsFactors = FALSE)
-#    out.df <- rbind(out.df,build.df)
-#  }
-#  out.df <- filter(out.df,!(grepl("/",metabolite)),!grepl("X-",metabolite),predicted_causal!="unknown",predicted_causal!="")
-#  ##out.df <- filter(out.df,!grepl("X-",metabolite),predicted_causal!="unknown",predicted_causal!="")
-#  out.df$MetaboID[out.df$metabolite=="Alpha-hydroxyisovalerate"] <- "M33937"
-#  out.df$metabolite[out.df$metabolite=="Alpha-hydroxyisovalerate"] <- "alpha-hydroxyisovalerate"
-#  out.df$MetaboID[out.df$metabolite=="Serine"] <- "M32315"
-#  out.df$metabolite[out.df$metabolite=="Serine"] <- "serine"
-#  out.df$MetaboID[out.df$metabolite=="1-palmitoylglycero-phosphoethanolamine"] <- "M35631"
-#  out.df$metabolite[out.df$metabolite=="1-palmitoylglycero-phosphoethanolamine"] <- "1-palmitoylglycerophosphoethanolamine"
-#  out.df$MetaboID[out.df$metabolite=="HWESASXX"] <- "M32836"
-#  out.df <- out.df[!duplicated(out.df),]
-#}
-
-#metab.df <- make_metab_df()
-
+oneMb.df <- fread(work.dir2 %&% "all_sigGenes_apayne_291117_anno.txt")
+#oneMb.genes <- filter(oneMb.df,pos_flag=="within-1MB-of-GWAS")$Gene %>% unique(.)
 
 ```
 
@@ -145,9 +117,51 @@ filter(sub,gene_name!=predicted_causal,gene_name==gwas.unknown,hmdb==TRUE) %>% d
 #     ABCC1     M37058                -        ABCC1 TRUE
 
 
+# IGNORE FOR NOW 
+## If I exclude genes within 1Mb of GWAS hits 
+## ex <- filter(sub,gene_name!=predicted_causal,hmdb==TRUE,!(gene_name%in%oneMb.genes))$gene_name %>% unique(.) 
+## length(ex)/704 # 0.1349 or 13.5% of novel genes are outside 1Mb of known met-QTL loci and are annotated to metabolic ## pathways
+
 
 dim(filter(metab.df,predicted_causal!="unknown"))[1] # 61
 dim(filter(metab.df,predicted_causal=="unknown"))[1] # 18
+
+
+```
+
+
+## Re-evaluation (first) 
+
+826 Total significant gene-metabolite pairs 
+
+41 gene-metabolite pairs involve genes that are predicted causal for the metabolite 
+413 significant gene-metabolite pairs are within 1Mb of significant metQTLs, likely to be bystanders 
+372 significant gene-metabolite pairs are not bystander associations and 
+    do not involve predicted causal genes for the metabolite 
+
+121 pairs are outside of 1Mb windows, not predicted causal for the metabolite, and are in hmdb; 
+    corresponding to 105 unique genes 
+Therefore, upwards of 32.5% (121/371) of novel genes-metabolite are biologically plausible 
+
+```{r}
+
+out.df <- c() 
+for (i in 1:dim(sub)[1]){
+  sub.df <- sub[i,]
+  g <- sub.df$gene_name; m <- sub.df$metabolite; h <- sub.df$hmdb; c <- sub.df$predicted_causal
+  check1 <- nchar(c) > 1 # is gene already a predicted causal gene for the metab? 
+  check2 <- h == TRUE # is gene annotated to a metabolic pathway 
+  # check 3 : is gene within 1Mb of GWAS sigal for the metabolite 
+  check3 <- filter(oneMb.df,Metabo_id==m,Gene==g)$pos_flag == "within-1MB-of-GWAS" 
+  if (check1==FALSE & check2==TRUE & check3==FALSE){
+    out.df <- rbind(out.df,sub.df)
+  }
+}
+
+filt.df <- out.df
+filt.df %>% dim(.) # 121
+121/372 # 0.3252688
+filt.df$gene_name %>% unique(.) %>% length(.) # 105 genes 
 
 
 ```
@@ -170,8 +184,6 @@ get_metab_annot <- function(query.gene){
     return(list(NA,NA))
   }
 }
-
-#get_metab_annot("NT5C1B")
 
 group_metab_assoc_genes <- function(metab){
   gene.vec <- filter(mtxn.df,metabolite==metab)$gene_name %>% unique(.)
@@ -261,114 +273,7 @@ full.df <- build_full_metab_df(alt=TRUE)
 
 
 
-# Make results tables 
-
-## Table 1: Profile of MetaXcan results for known metabolite genes
-
-```{r}
-
-#library(gridExtra)
-#library(grid)
-
-make_table_1 <- function(type="predicted_causal"){
-  if (type=="predicted_causal"){
-    m.df=filter(metab.df,predicted_causal!="unknown")
-  } else{
-    m.df=filter(metab.df,predicted_causal=="unknown")
-  }
-  pb <- txtProgressBar(min=0,max=dim(m.df)[1],style=3)
-  top.q <- c()
-  top.tissue <- c()
-  num.tissues <- c()
-  
-  for (i in 1:dim(m.df)[1]){
-    setTxtProgressBar(pb,i)
-    metab <- m.df$metabolite[i]
-    if (type=="predicted_causal"){
-      g <- m.df$predicted_causal[i]
-    } else{
-      g <- m.df$gene_name[i]
-    }
-    id <- m.df$MetaboID[i]
-    sub <- filter(mtxn.df,gene_name==g,metabolite_name==metab) %>% arrange(FDR_studywide)
-    
-    if (dim(sub)[1]==0){
-      toptiss <- NA
-      topq <- NA
-      numtiss <- NA 
-      
-    } else{
-      toptiss <- sub$Tissue[1]
-      numtiss <- dim(sub)[1]
-      topq <- sub$FDR_studywide[1]
-    }
-    top.q <- append(top.q,topq)
-    top.tissue <- append(top.tissue,toptiss)
-    num.tissues <- append(num.tissues,numtiss)
-  }
-  out.df <- dplyr::select(m.df,one_of("MetaboID","metabolite","gene_name","predicted_causal")) %>% as.data.frame(.)
-  out.df$number.mtxn.assoc <- num.tissues
-  out.df$most.sig.tissue <- top.tissue %>% as.character(.)
-  out.df$most.sig.tissue <- gsub("_","-",out.df$most.sig.tissue)
-  out.df$most.siq.qvalue <- top.q
-  out.df <- arrange(out.df,desc(num.tissues))
-  names(out.df) <- c("Metabolite ID","Metabolite Name","Associated Gene","Causal Gene","Number of Gene\n Associations","Most Significant\nTissue","q-value")
-  
-  tt3 <- ttheme_minimal(
-    core=list(bg_params = list(fill = blues9[1:2], col=NA),
-            fg_params=list(fontface=3)),
-    colhead=list(fg_params=list(col="navyblue", fontface=4L)),
-    rowhead=list(fg_params=list(col="white", fontface=3L)))
-  noNA.df <- na.omit(out.df)
-  noNA.df$`q-value` <- map(noNA.df$`q-value`, function(n){signif(n,3)}) %>% as.numeric(.)
-  grob2 <- tableGrob(noNA.df,theme=tt3)
-  
-  return(list(out.df,noNA.df,grob2))
-  
-}
-
-
-```
-
-
-
-```{r}
-
-p1.list <- make_table_1()
-
-dim(p1.list[[1]])[1] # there are 61 predicted causal gene/metabolite pairs 
-dim(p1.list[[2]])[1] # 42 are supported by S-PrediXcan; 68% (0.6885246)
-
-grid.draw(p1.list[[3]])
-names(p1.list[[2]]) <- c("Metabolite ID","Metabolite Name","Associated Gene","Causal Gene",
-                         "Number of Gene Associations","Most Significant Tissue","q-value")
-write.csv(x=p1.list[[2]],file=output.dir%&%"table1-hmdb.csv",quote=F,row.names=F)
-
-sum(p1.list[[2]]$`Number of Gene
- Associations` == 1) # 9 
-sum(p1.list[[2]]$`Number of Gene
- Associations` > 1) # 33
-
-# save file as known-plot1.png 
-
-p1b.list <- make_table_1(type="unknown")
-dim(p1b.list[[1]])[1] # 18 unknown gene / pairs 
-dim(p1b.list[[2]])[1] # 10 are supported by MetaXcan 
-grid.draw(p1b.list[[3]])
-
-# save file as unknown-plot1.png 
-names(p1b.list[[2]]) <- c("Metabolite ID","Metabolite Name","Associated Gene","Causal Gene",
-                         "Number of Gene Associations","Most Significant Tissue","q-value")
-write.csv(x=p1b.list[[2]],file=output.dir%&%"table2-hmdb.csv",quote=F,row.names=F)
-
-
-```
-
-
-
-
 ## Table 2: Profile of novel Metaxcan genes, for those that are annotated to same metabolic pathway as known metabolite genes, to what extent are they significant?
-
 
 
 ```{r}
@@ -380,8 +285,6 @@ slice<-function(x,n) { # https://stackoverflow.com/questions/2434833/how-can-i-p
 }
 
 make_table_2_df  <- function(){
-  
-  
   # Subset to novel genes annotated in hmdb pathways 
   sub.df <- filter(mtxn.df,predicted_causal=="-",hmdb==TRUE) %>% #,
                    #metabolite%in%filter(metab.df,predicted_causal!="unknown")$MetaboID) %>% 
@@ -462,9 +365,6 @@ tab2.df <- make_table_2_df()
 
 tab2.df$Tissue <- gsub("_","-",tab2.df$Tissue)
 
-write.table(tab2.df,output.dir%&%"novel_genes_sharing_pathways_with_known.txt",sep="\t",quote=FALSE,row.names=TRUE)
-
-
 tab2.df$shared.go.pathways <- map(tab2.df$shared.go.pathways,function(s){
   vec <- strsplit(s,split=",")[[1]] 
   vec <- vec[vec !="NA"] 
@@ -488,10 +388,6 @@ tab2.df$FDR_studywide <- map(tab2.df$FDR_studywide, function(n){signif(n,3)}) %>
 tabgrob <- tableGrob(tab2.df,theme=tt3)
 grid.draw(tabgrob)
   
-# novel.png
-#write.csv(x=tab2.df,file=output.dir%&%"table3-hmdb.csv",quote=F,row.names=F)
-write.csv(x=tab2.df,file=output.dir%&%"SuppTable-hmdb.csv",quote=F,row.names=F)
-
 ```
 
 
@@ -502,36 +398,191 @@ t <- dplyr::select(tab2.df,one_of("gene_name","metabolite")); t<-t[!duplicated(t
 dim(t)[1] # corresponding to 24 unique gene/metabolite pairs and 
 t$gene_name %>% unique(.) %>% length(.) # 24 unique genes 
 
+```
 
-write.table(x=t,file="/home/jason/Tempo/metabpath_shared_24.txt",sep="\t",row.names=F,quote=F)
+
+## Re-evaluation (second part)
+
+826 Total significant gene-metabolite pairs 
+
+Of the 372 pairs that do not involve a predicted causal gene and are not bystander genes wrt the metabolite, 
+  12 pairs (corresponding to 12 unique genes) involve a gene that is in the same metabolic pathway as a predicted causal 
+  gene for that metabolite 
+
+Therefore, upwards of 3.2% (12/372) of novel genes-metabolite are biologically plausible, lower range  
+
+
+```{r}
+
+out.df <- c() 
+for (i in 1:dim(t)[1]){
+  sub.df <- t[i,]
+  m <- sub.df$metabolite; g <- sub.df$gene_name
+  c <- filter(sub,metabolite==m,gene_name==g)$predicted_causal
+  p <- filter(oneMb.df,Metabo_id==m,Gene==g)$pos_flag
+  check1 <- nchar(c) > 1 # is the gene a predited causal gene for the metabolite 
+  check2 <- p == "within-1MB-of-GWAS" # is gene w/n 1Mb for a GWAS signal for that metabolite 
+  if (check1==FALSE & check2 == FALSE){
+    out.df <- rbind(out.df,sub.df)
+  }
+}
+
+filt2.df <- out.df # 12 pairs 
+filt2.df %>% dim(.) # 12 novel gene-metabolite pairs (12 unique genes)
+12/372  # 0.03225806
+filt2.df$gene_name %>% unique(.) %>% length(.) # 12 unique genes
 
 ```
 
+
+
+
+## Write updated data frames 
+
+append to dfs 
+
+```{r}
+
+filt.df <- filt.df %>% dplyr::select(.,one_of("gene_name","metabolite"))
+filt2.df <- filt2.df %>% dplyr::select(.,one_of("gene_name","metabolite"))
+
+
+append_to_filt <- function(filt.df){
+  filt.df$gene <- map(filt.df$gene_name, function(gn){filter(mtxn.df,gene_name==gn)$gene %>% 
+      unique(.)}) %>% as.character(.)
+  filt.df <- dplyr::select(filt.df,one_of("gene","gene_name","metabolite"))
+  filt.df$metabolite_name <- map(filt.df$metabolite, function(m){filter(mtxn.df,metabolite==m)$metabolite_name %>% 
+      unique(.)}) %>% as.character(.)  
+  filt.df$num_sig_tiss <- map(1:dim(filt.df)[1],function(i){
+    (filter(mtxn.df,gene==filt.df$gene[i],metabolite==filt.df$metabolite[i]) %>% dim(.))[1]
+  }) %>% as.integer(.)
+  most_sig_tiss <- c()
+  zscore <- c()
+  pvalue <- c()
+  FDR_studywide <- c() 
+  for (i in 1:dim(filt.df)[1]){
+    sub <- (filter(mtxn.df,gene==filt.df$gene[i],metabolite==filt.df$metabolite[i]) %>% arrange(.,pvalue))[1,]
+    most_sig_tiss <- append(most_sig_tiss,sub$Tissue)
+    zscore <- append(zscore,sub$zscore)
+    pvalue <- append(pvalue,sub$pvalue)
+    FDR_studywide <- append(FDR_studywide,sub$FDR_studywide)     
+  }
+  filt.df$most_sig_tiss <- most_sig_tiss; filt.df$zscore <- zscore
+  filt.df$pvalue <- pvalue; filt.df$FDR_studywide <- FDR_studywide
+  return(filt.df)
+}
+
+```
+
+
+```{r}
+
+filt.df <- append_to_filt(filt.df)
+filt2.df <- append_to_filt(filt2.df)
+
+```
+
+
+Append HMDB pathway information to data frame 1 
+
+
+```{r}
+
+append_hmdb_accession <- function(filt.df){
+  f.df <- filt.df
+  f.df$HMDB_Accession <- map(f.df$gene_name,function(g){
+    filter(hmdb.df,gene_name==g)$accession
+  }) %>% as.character(.)
+  return(f.df)
+}
+
+```
+
+
+Append shared information for data frame 2 
+
+```{r}
+
+
+append_shared_pathways <- function(filt2.df){
+  f.df <- filt2.df
+  pred.causal.gene <- c()
+  shared.go.pathways <- c()
+  shared.hmdb.pathways <- c() 
+  pb <- txtProgressBar(min=0,max=dim(f.df)[1],style=3)
+  for (i in 1:dim(f.df)[1]){
+    setTxtProgressBar(pb,i)
+    g <- f.df$gene_name[i]
+    mid <- f.df$metabolite[i]
+    causal.genes.df <- filter(metab.df,MetaboID==mid)
+    pcg <-  causal.genes.df$predicted_causal %>% paste(.,collapse=",")
+    query <- get_metab_annot(g)
+    query.go <- query[[1]]
+    query.hmdb <- query[[2]]
+    reflists <-  ifelse(dim(causal.genes.df)[1]>0,map(1:length(causal.genes.df$predicted_causal), function(i){
+      pc <- causal.genes.df$predicted_causal[i]
+      metabs <- get_metab_annot(pc)
+      return(metabs)
+      }),NA)
+    sgp <- ifelse(dim(causal.genes.df)[1]>0,map(1:length(reflists),function(i){ # 
+      go.vec <- reflists[[i]][[1]]
+      overlap <- go.vec[go.vec %in% query.go]
+      if (length(overlap)==0){
+        overlap <- NA
+      }
+      return(overlap)
+    }) %>% unlist(.) %>% as.character(.)  %>% paste0(.,collapse=","),NA) 
+    shp <- ifelse(dim(causal.genes.df)[1]>0,map(1:length(reflists),function(i){
+      hmdb.vec <- reflists[[i]][[2]]
+      overlap <- hmdb.vec[hmdb.vec %in% query.hmdb]
+      if (length(overlap)==0){
+        overlap <- NA
+      }
+      return(overlap)
+    }) %>% unlist(.) %>% as.character(.) %>% paste0(.,collapse=","),NA)
+    pred.causal.gene <- append(pred.causal.gene,pcg)
+    shared.go.pathways <- append(shared.go.pathways,sgp)
+    shared.hmdb.pathways <- append(shared.hmdb.pathways,shp)  
+  }
+  out.df <- cbind(f.df,pred.causal.gene,shared.go.pathways,shared.hmdb.pathways)
+  out.df$pred.causal.gene <- out.df$pred.causal.gene %>% as.character(.)
+  out.df$shared.go.pathways <- out.df$shared.go.pathways %>% as.character(.)
+  out.df$shared.hmdb.pathways <- out.df$shared.hmdb.pathways %>% as.character(.)
+  out.df <- as.data.frame(out.df)
+  out.df$shared.hmdb.pathways[out.df$shared.hmdb.pathways == "character(0)"] = "NA"
+  return(out.df)
+}
+
+```
+
+
+```{r}
+
+filt.df <- append_hmdb_accession(filt.df)
+filt2.df <- append_shared_pathways(filt2.df)
+
+write.table(filt.df,file="updated_supp_table1.txt",sep="\t",quote=F,row.names=F)
+write.table(filt2.df,file="updated_supp_table2.txt",sep="\t",quote=F,row.names=F)
+
+```
 
 
 # Summary 
 
-```{r}
+826 Total significant gene-metabolite pairs 
 
-#numer <- (filter(sub,known==FALSE,hmdb==TRUE)$gene_name %>% unique(.) %>% length(.)) 
-#denom <- filter(sub,known==FALSE)$gene_name %>% unique(.) %>% length(.)
-#num.nov.hmdb <- numer/denom # 0.2742616
+41 gene-metabolite pairs involve genes that are predicted causal for the metabolite 
+413 significant gene-metabolite pairs are within 1Mb of significant metQTLs, likely to be bystanders 
+372 significant gene-metabolite pairs are not bystander associations and 
+    do not involve predicted causal genes for the metabolite 
 
-#numer <- tab2.df$gene_name %>% unique(.) %>% length(.)
-#num.nov.sharepath <- numer/denom # 0.039 or 4% 
-```
-
-
-#628 S-PrediXcan associations involve novel genes associated with metabolites with predicted causal genes, corresponding to 188 unique gene/metabolite pairs, and 173 unique genes 
-#57 associations involve novel genes that share the same metabolic pathway as a predicted_causal gene for that metabolite, corresponding to 24 unique gene/metabolite pairs and  24 unique genes 
-
-#1 predicted causal gene, SLC16A9 (for M15500 and M32412) not in HMDB
-#34 known genes in HMDB
-#6 of the gwas unknown genes are NOT in HMDB
-#4 of the gwas unknown genes are in HMDB
-#785 (704 genes) novel gene/metabolite pairs 
-#212 (189 genes) of the novel gene/metabolite pairs are in HMDB
-#( 212/785 = 27%, 189/704 = 0.268)
-#4 pairs of which (corresponding to 4 unique genes) are in HMDB and are gwas.unknown 
+121 pairs are outside of 1Mb windows, not predicted causal for the metabolite, and are in hmdb; 
+    corresponding to 105 unique genes 
+Therefore, upwards of 32.5% (121/371) of novel genes-metabolite are biologically plausible 
 
 
+Of the 372 pairs that do not involve a predicted causal gene and are not bystander genes wrt the metabolite, 
+  12 pairs (corresponding to 12 unique genes) involve a gene that is in the same metabolic pathway as a predicted causal 
+  gene for that metabolite 
+
+Therefore, upwards of 3.2% (12/372) of novel genes-metabolite are biologically plausible, lower range  
