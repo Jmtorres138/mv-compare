@@ -46,8 +46,12 @@ Proximity annotation file
 
 ```{r}
 
-oneMb.df <- fread(work.dir2 %&% "all_sigGenes_apayne_291117_anno.txt")
+#oneMb.df <- fread(work.dir2 %&% "archive/all_sigGenes_apayne_291117_anno.txt")
 #oneMb.genes <- filter(oneMb.df,pos_flag=="within-1MB-of-GWAS")$Gene %>% unique(.)
+
+oneMb.df <- fread(work.dir2 %&% "all_sigGenes_apayne_171218_anno.txt")
+
+
 
 ```
 
@@ -135,13 +139,13 @@ dim(filter(metab.df,predicted_causal=="unknown"))[1] # 18
 826 Total significant gene-metabolite pairs 
 
 41 gene-metabolite pairs involve genes that are predicted causal for the metabolite 
-413 significant gene-metabolite pairs are within 1Mb of significant metQTLs, likely to be bystanders 
-372 significant gene-metabolite pairs are not bystander associations and 
-    do not involve predicted causal genes for the metabolite 
+473 significant gene-metabolite pairs are within 1Mb of significant metQTLs, likely to be bystanders (from Anne's section of manuscript)
+312 significant gene-metabolite pairs are not bystander associations and 
+    do not involve predicted causal genes for the metabolite [could also be 312 = 826 - (41+473) ]
 
-121 pairs are outside of 1Mb windows, not predicted causal for the metabolite, and are in hmdb; 
-    corresponding to 105 unique genes 
-Therefore, upwards of 32.5% (121/371) of novel genes-metabolite are biologically plausible 
+96 pairs are outside of 1Mb windows, not predicted causal for the metabolite, and are in hmdb; 
+    corresponding to 83 unique genes 
+Therefore, upwards of 30.8% (96/312) of novel genes-metabolite are biologically plausible 
 
 ```{r}
 
@@ -159,9 +163,9 @@ for (i in 1:dim(sub)[1]){
 }
 
 filt.df <- out.df
-filt.df %>% dim(.) # 121
-121/372 # 0.3252688
-filt.df$gene_name %>% unique(.) %>% length(.) # 105 genes 
+filt.df %>% dim(.) # 96
+96/312 # 0.3086817
+filt.df$gene_name %>% unique(.) %>% length(.) # 83 genes 
 
 
 ```
@@ -405,11 +409,11 @@ t$gene_name %>% unique(.) %>% length(.) # 24 unique genes
 
 826 Total significant gene-metabolite pairs 
 
-Of the 372 pairs that do not involve a predicted causal gene and are not bystander genes wrt the metabolite, 
+Of the 312 pairs that do not involve a predicted causal gene and are not bystander genes wrt the metabolite, 
   12 pairs (corresponding to 12 unique genes) involve a gene that is in the same metabolic pathway as a predicted causal 
   gene for that metabolite 
 
-Therefore, upwards of 3.2% (12/372) of novel genes-metabolite are biologically plausible, lower range  
+Therefore, upwards of 3.8% (12/312) of novel genes-metabolite are biologically plausible, lower range  
 
 
 ```{r}
@@ -429,7 +433,7 @@ for (i in 1:dim(t)[1]){
 
 filt2.df <- out.df # 12 pairs 
 filt2.df %>% dim(.) # 12 novel gene-metabolite pairs (12 unique genes)
-12/372  # 0.03225806
+12/312  # 0.03846154
 filt2.df$gene_name %>% unique(.) %>% length(.) # 12 unique genes
 
 ```
@@ -572,17 +576,16 @@ write.table(filt2.df,file="updated_supp_table2.txt",sep="\t",quote=F,row.names=F
 826 Total significant gene-metabolite pairs 
 
 41 gene-metabolite pairs involve genes that are predicted causal for the metabolite 
-413 significant gene-metabolite pairs are within 1Mb of significant metQTLs, likely to be bystanders 
-372 significant gene-metabolite pairs are not bystander associations and 
-    do not involve predicted causal genes for the metabolite 
+473 significant gene-metabolite pairs are within 1Mb of significant metQTLs, likely to be bystanders (from Anne's section of manuscript)
+312 significant gene-metabolite pairs are not bystander associations and 
+    do not involve predicted causal genes for the metabolite [could also be 312 = 826 - (41+473) ]
 
-121 pairs are outside of 1Mb windows, not predicted causal for the metabolite, and are in hmdb; 
-    corresponding to 105 unique genes 
-Therefore, upwards of 32.5% (121/371) of novel genes-metabolite are biologically plausible 
+96 pairs are outside of 1Mb windows, not predicted causal for the metabolite, and are in hmdb; 
+    corresponding to 83 unique genes 
+Therefore, upwards of 30.8%% (96/312) of novel genes-metabolite are biologically plausible
 
-
-Of the 372 pairs that do not involve a predicted causal gene and are not bystander genes wrt the metabolite, 
+Of the 312 pairs that do not involve a predicted causal gene and are not bystander genes wrt the metabolite, 
   12 pairs (corresponding to 12 unique genes) involve a gene that is in the same metabolic pathway as a predicted causal 
   gene for that metabolite 
 
-Therefore, upwards of 3.2% (12/372) of novel genes-metabolite are biologically plausible, lower range  
+Therefore, upwards of 3.8% (12/312) of novel genes-metabolite are biologically plausible, lower range 
