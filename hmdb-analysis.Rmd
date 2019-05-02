@@ -138,6 +138,9 @@ filter(sub,gene_name!=predicted_causal) %>% dim(.) # 785 (704 genes) novel gene/
 filter(sub,gene_name!=predicted_causal,hmdb==TRUE) %>% dim(.) # 212 (189 genes) of the novel gene/metabolite pairs are in HMDB
 # 212/785 = 27%, 189/704 = 0.268
 #filter(sub,gene_name!=predicted_causal,hmdb==TRUE)$gene_name %>% unique(.) %>% length(.) # 
+
+
+
 filter(sub,gene_name!=predicted_causal,gene_name==gwas.unknown,hmdb==TRUE) %>% dim(.) # 4 pairs of which (corresponding to 4 unique genes) are in HMDB and are gwas.unknown 
 #      ANKH     M01564                -         ANKH TRUE
 #     ACSM5     M15749                -        ACSM5 TRUE
@@ -501,9 +504,9 @@ dim(tab2.df)[1] # 57 associations involve novel genes that share the same metabo
 t <- dplyr::select(tab2.df,one_of("gene_name","metabolite")); t<-t[!duplicated(t),]
 dim(t)[1] # corresponding to 24 unique gene/metabolite pairs and 
 t$gene_name %>% unique(.) %>% length(.) # 24 unique genes 
-
-
 write.table(x=t,file="/home/jason/Tempo/metabpath_shared_24.txt",sep="\t",row.names=F,quote=F)
+
+
 
 ```
 
