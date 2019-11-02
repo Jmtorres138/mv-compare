@@ -14,39 +14,23 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r}
 
 "%&%" <- function(a,b) {paste0(a,b)}
-library("dplyr");library("data.table")
+library("tidyverse");library("data.table")
 library("GenomicRanges")
 
-serv.dir1 <- "/Users/jtorres/FUSE/"
-serv.dir2 <- "/Users/jtorres/FUSE5/"
+serv.dir1 <- "/home/jason/science/servers/FUSE/"#"/Users/jtorres/FUSE/"
+serv.dir2 <- "/home/jason/science/servers/FUSE5/"#"/Users/jtorres/FUSE5/"
 
 work.dir <- serv.dir2 %&% "projects/mv-compare/"
 input.dir <- serv.dir1 %&% "projects/mv-compare/"
 
-mtx.df <- fread(input.dir %&% "input_files/" %&%
-          "metaxcan_full_results_filtered_for_model_fit_and_pval_at_0.01.txt")
-mtx.df$pairs <- mtx.df$metabolite %&% ":" %&% mtx.df$gene_name
-
 s6.df <- fread(input.dir %&% "input_files/" %&%
                  "shin_supplemetary_tables_tableS6.txt")
 s6.df$pairs <- s6.df$metabolite %&% ":" %&% s6.df$gene_name
-causal.df <- fread(input.dir %&% "input_files/" %&% "ndunguTabS2.csv")
+causal.df <- fread(input.dir %&% "input_files/" %&% "metabolite_GWAS_genes_from-Anne.txt")
 
 ```
 
-```{r}
-causal.sub <- filter(causal.df,!grepl("unknown",predicted_causal))
-causal.pairs <- causal.sub$Metaboid%&%":"%&%causal.sub$predicted_causal %>% unique(.) # 61 total but 60 unique 
-#                    isobutyrylcarnitine   M33441  SLC22A1          SLC22A1
-#                    isobutyrylcarnitine   M33441  SLC22A2          SLC22A1
-#
-#filter(s6.df,`Predicted causal gene`=="SLC22A2") # Zero 
-causal.genes <- causal.sub$predicted_causal %>% unique(.) 
 
-tp.pairs <- causal.pairs[causal.pairs %in% mtx.df$pairs] #%>% length(.)
-fn.pairs <- causal.pairs[!(causal.pairs %in% mtx.df$pairs)] #%>% length(.)
-
-```
 
 ```{r}
 
@@ -58,6 +42,7 @@ write.table(x=sub.df$SNP,work.dir%&%"locus_snps.txt",sep="\t",quote=F,col.names=
 
 Manually looked up SNP position on Ensembl 37 Bimart (GRCh37.p13) accessed November 1, 2019
 
+Create GenomicRanges objects 
 
 ```{r}
 
@@ -67,6 +52,7 @@ mart.df <- fread(work.dir%&%"locus_snps_mart_export.txt") %>% filter(.,!grepl("H
 names(mart.df)[1] <- "SNP"
 
 snp.df <- inner_join(sub.df,mart.df,by="SNP")
+snp.df$`Chromosome/scaffold name` <- "chr" %&% snp.df$`Chromosome/scaffold name`
 
 snp.gr <- GRanges(seqnames = snp.df$`Chromosome/scaffold name`,
                   IRanges(snp.df$`Chromosome/scaffold position start (bp)`,
@@ -74,8 +60,98 @@ snp.gr <- GRanges(seqnames = snp.df$`Chromosome/scaffold name`,
 
 pth <- serv.dir2 %&% "datasets/gencode.v30lift37.annotation.gtf"
 genes.df <- rtracklayer::import(pth)
+g.df <- as.data.frame(genes.df)
+g.df$ensid <- map(g.df$gene_id,function(s){strsplit(s,".",fixed=TRUE)[[1]][1]}) %>%
+  as.character(.)
+gene.df <- filter(g.df,type=="gene")#,gene_type=="protein_coding")
+gene.gr <- GRanges(seqnames = gene.df$seqnames,
+                   IRanges(gene.df$start,gene.df$end),
+                   gene.df$strand)
+names(gene.gr) <- gene.df$ensid
+
+```
 
 
+
+```{r}
+
+mtx.df <- fread(input.dir %&% "input_files/" %&%
+          "metaxcan_full_results_filtered_for_model_fit_and_pval_at_0.01.txt")
+mtx.ensid <- mtx.df$gene %>% unique(.)
+
+mtx.df$pairs <- mtx.df$metabolite %&% ":" %&% mtx.df$gene_name
+
+
+```
+
+
+
+
+```{r}
+
+causal.sub <- filter(causal.df,!grepl("unknown",predicted_causal))
+causal.pairs <- causal.sub$Metaboid%&%":"%&%causal.sub$predicted_causal %>% unique(.) # 61 total but 60 unique 
+#                    isobutyrylcarnitine   M33441  SLC22A1          SLC22A1
+#                    isobutyrylcarnitine   M33441  SLC22A2          SLC22A1
+#
+#filter(s6.df,`Predicted causal gene`=="SLC22A2") # Zero 
+causal.genes <- causal.sub$predicted_causal %>% unique(.) 
+
+tp.pairs <- causal.pairs[causal.pairs %in% mtx.df$pairs] 
+tp.genes <- map(tp.pairs,function(s){strsplit(s,":")[[1]][2]}) %>% 
+  as.character(.) %>% unique(.)
+fn.pairs <- causal.pairs[!(causal.pairs %in% mtx.df$pairs)]
+fn.genes <- map(fn.pairs,function(s){strsplit(s,":")[[1]][2]}) %>% 
+  as.character(.) %>% unique(.)
+
+```
+
+
+Note that CCBL1 is outdated, need to manually replace with KYAT1 
+
+```{r}
+
+tp.pairs[4] <- "M18349:KYAT1"
+tp.genes[4] <- "KYAT1"
+
+```
+
+
+Note: that 98.1% of ensid id genes agree between association results and ensembl 37 reference data frame 
+
+```{r}
+
+(unique(mtx.df$gene) %in% g.df$ensid) %>% sum(.)
+
+# 722 / 736 
+
+```
+
+
+Expand SNP GR by windows 
+
+```{r}
+
+snp1Mb.gr <- snp.gr
+start(snp1Mb.gr) <- start(snp1Mb.gr) - 1000000
+end(snp1Mb.gr) <- end(snp1Mb.gr) + 1000000
+
+snp250kb.gr <- snp.gr
+start(snp250kb.gr) <- start(snp250kb.gr) - 250000
+end(snp250kb.gr) <- end(snp250kb.gr) + 250000
+
+```
+
+
+Extract all genes within windows 
+
+```{r}
+
+sub1Mb.gr <- subsetByOverlaps(gene.gr, snp1Mb.gr)
+sub1Mb.genes <- names(sub1Mb.gr)
+
+sub250kb.gr <- subsetByOverlaps(gene.gr, snp250kb.gr)
+sub250kb.genes <- names(sub250kb.gr)
 
 ```
 
@@ -86,8 +162,8 @@ genes.df <- rtracklayer::import(pth)
 ```{r}
 
 # Estimate True Negatives 
-est.tn <- function(total.genes,tp,fp,fn){
-  total.genes - (tp + fp) - fn 
+est.tn <- function(total.pairs,tp,fp,fn){
+  total.pairs - (tp + fp) - fn 
 }
 
 # Estimate Specificity 
@@ -102,16 +178,64 @@ est.acc <- function(tn,tp,fn,fp){
 
 ```
 
-```{r}
+Estmate all values function 
 
+```{r}
 
 tp <- 41 # true positives
 fn <- 19 # false negatives; not 20 it seems! Must correct in manuscript 
 fp <- 473 # false positives 
 
-tn.est1 <- est.tn(1000,tp,fp,fn)
-spec.est1 <- est.spec(tn.est1,fp)
-acc.est1 <- est.acc(tn.est1,tp,fn,fp)
+benchmark_performance <- function(tp,fp,fn,total1mb,total250kb){
+  # num.loc.genes is the total number of evaluated genes at mQTL loci 
+  print("Sensitivity (TP / (TP+FN) x 100: " %&% round(tp/(tp+fn) * 100,2))
+  print("Positive Predictive Value (TP / (TP + FP) x 100): " %&% round(tp/(tp+fp) * 100,2))
+  
+  ### Numbers within 1Mb (2Mb window)
+  tn1mb <- est.tn(total1mb,tp,fp,fn)
+  print("True negatives within 1Mb of metQTLs (TG - (TP + FP) - FN): " %&% tn1mb)
+  print("Specificity within 1Mb of metQTLs (TN/(TN+FP) x 100): " %&% 
+          round(tn1mb/(tn1mb+fp) * 100,2))
+  print("Accuracy within 1Mb of metQTLs ((TN+TP)/(TN+TP+FN+FP) x 100): " %&% 
+          round((tn1mb+tp)/(tn1mb+tp+fn+fp) * 100,2))
+  
+  ### Adjusted number within 250kb (500kb window)  
+  tn250kb <- est.tn(total250kb,tp,fp,fn)
+  print("True negatives within 250kb of metQTLs (TG - (TP + FP) - FN): " %&% tn250kb)
+  print("Specificity within 250kb of metQTLs (TN/(TN+FP) x 100): " %&% 
+          round(tn250kb/(tn250kb+fp) * 100,2))
+  print("Accuracy within 250kb of metQTLs ((TN+TP)/(TN+TP+FN+FP) x 100): " %&% 
+        round((tn250kb+tp)/(tn250kb+tp+fn+fp) * 100,2))
+}
 
 ```
+
+
+```{r}
+
+total1mb <- length(unique(sub1Mb.genes)) # currently looking at all genes w/n 1Mb 
+total250kb <- length(unique(sub250kb.genes)) # currently looking at genes w/n 250kb  
+
+benchmark_performance(tp,fp,fn,total1mb,total250kb)
+
+benchmark_performance(tp,494,fn,total1mb,total250kb)
+benchmark_performance(tp,197,fn,total1mb,total250kb)
+
+```
+
+
+
+
+Issues:
+
+Can't identify the 473 pairs from available data; 
+Not all causal genes seem to be protein coding; shall we limit to protein coding?? 
+For total numbers, shall that be genes or pairs; if pairs then specificity and accuracy become 99% 
+
+#> filter(mtx.df,gene%in%sub1Mb.genes,!(pairs %in% causal.pairs))$pairs %>% unique(.) %>% #length(.)
+#[1] 494 ; this should be 473 from my expectation 
+#> filter(mtx.df,gene%in%sub250kb.genes,!(pairs %in% causal.pairs))$pairs %>% unique(.) %>% #length(.)
+#[1] 197
+
+# Note that 494 FP pairs yields similar results but 194 (for 250kb) increase spec/acc estimates from low 40% range to mid 70% range; so assumptions do matter 
 
