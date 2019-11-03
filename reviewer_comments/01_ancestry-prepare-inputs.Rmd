@@ -1,0 +1,108 @@
+---
+title: "Untitled"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Setup 
+
+```{r}
+
+"%&%" <- function(a,b) {paste0(a,b)}
+library("tidyverse");library("data.table")
+
+serv.dir <- "/home/jason/science/servers/FUSE5/"#"/Users/jtorres/FUSE5/"
+work.dir <- serv.dir %&% "projects/mv-compare/"
+load(work.dir %&% "reviewer_comments/finalmodels_Muscle-Skeletal.Rda")
+snp.df <- fread(work.dir %&% "reviewer_comments/list_of_final_complete_snps.txt")
+
+
+```
+
+
+Create files with Gene Name and model SNPs 
+
+```{r}
+
+pb <- txtProgressBar(min=1,max=length(finalmodels),style=3)
+out.df <- c()
+for (i in 1:length(finalmodels)){
+  setTxtProgressBar(pb,i)
+  gene <- names(finalmodels)[i] # gene name 
+  snp <- finalmodels[[i]][2] %>% unlist(.)  # snps 
+  build.df <- data.frame(gene,snp,stringsAsFactors = F)  
+  out.df <- rbind(out.df,build.df)
+}
+
+names(out.df) <- c("Gene","RS_ID_dbSNP147_GRCh37p13")
+full.df <- inner_join(out.df,snp.df,by="RS_ID_dbSNP147_GRCh37p13")
+snp.vec <- full.df$VariantID
+
+write.table(x=full.df,file=work.dir %&% "reviewer_comments/model_snp_info.txt",
+            sep="\t",quote=F,col.names=T,row.names=F)
+write.table(x=unique(snp.vec),file=work.dir %&% "reviewer_comments/model_snp_list.txt",
+            sep="\t",quote=F,col.names=F,row.names=F)
+
+```
+
+
+```{r}
+
+pheno.df <- fread(work.dir %&%
+                    "reviewer_comments/GTEx_Analysis_2016-01-15_v7_SubjectPhenotypesDS.txt")
+# 3 = White ; 2 = African American ; 5 = Unknown ; 1 (8 individuals) and 4 (3 individual) not clear 
+
+all.subjects <- pheno.df$SUBJID
+aa.subjects <- filter(pheno.df,RACE==2)$SUBJID
+white.subjects <- filter(pheno.df,RACE==3)$SUBJID
+
+write.table(x=all.subjects,file=work.dir %&% "reviewer_comments/all_subjects.txt",
+            sep="\t",quote=F,col.names=F,row.names=F)
+write.table(x=aa.subjects,file=work.dir %&% "reviewer_comments/aa_subjects.txt",
+            sep="\t",quote=F,col.names=F,row.names=F)
+write.table(x=white.subjects,file=work.dir %&% "reviewer_comments/white_subjects.txt",
+            sep="\t",quote=F,col.names=F,row.names=F)
+```
+
+
+```{r}
+
+df <- read.table(work.dir %&% "reviewer_comments/vcf_snps.txt",stringsAsFactors = F,header=T)
+vcf.snps <- df$ID 
+
+```
+
+
+Subset VCF files to these SNPs in several ways 
+(all individuals, each ancestry groups) 
+
+
+```{bash}
+
+/apps/well/vcftools/0.1.14-gcc4.7.2/bin/vcftools --vcf /well/got2d/apayne/GTEx_v7/metabolite_paper/vcf_and_gt_data/full_unqced_vcf_with_all_final_positions.recode.vcf --snps /well/mccarthy/users/jason/projects/mv-compare/reviewer_comments/model_snp_list.txt --keep /well/mccarthy/users/jason/projects/mv-compare/reviewer_comments/aa_subjects.txt --recode --out aa_muscle-skeletal 
+
+/apps/well/vcftools/0.1.14-gcc4.7.2/bin/vcftools --vcf /well/got2d/apayne/GTEx_v7/metabolite_paper/vcf_and_gt_data/full_unqced_vcf_with_all_final_positions.recode.vcf --snps /well/mccarthy/users/jason/projects/mv-compare/reviewer_comments/model_snp_list.txt --keep /well/mccarthy/users/jason/projects/mv-compare/reviewer_comments/white_subjects.txt --recode --out white_muscle-skeletal 
+
+/apps/well/vcftools/0.1.14-gcc4.7.2/bin/vcftools --vcf /well/got2d/apayne/GTEx_v7/metabolite_paper/vcf_and_gt_data/full_unqced_vcf_with_all_final_positions.recode.vcf --snps /well/mccarthy/users/jason/projects/mv-compare/reviewer_comments/model_snp_list.txt --keep /well/mccarthy/users/jason/projects/mv-compare/reviewer_comments/all_subjects.txt --recode --out all_muscle-skeletal 
+
+
+```
+
+Issue: There are 87,060 model SNPs (filtered, muscle skeletal) and 825,212 SNPs in the referenced VCF file but ONLY 29,856 overlap, need to reconcile this with Anthony 
+
+
+Code for LD calculations 
+
+```{bash}
+
+/apps/well/vcftools/0.1.14-gcc4.7.2/bin/vcftools --vcf /well/mccarthy/users/jason/projects/mv-compare/reviewer_comments/all_muscle-skeletal.recode.vcf --geno-r2 --ld-window 1000000 --out all_muscle-skeletal
+
+/apps/well/vcftools/0.1.14-gcc4.7.2/bin/vcftools --vcf /well/mccarthy/users/jason/projects/mv-compare/reviewer_comments/aa_muscle-skeletal.recode.vcf --geno-r2 --ld-window 1000000 --out aa_muscle-skeletal
+
+/apps/well/vcftools/0.1.14-gcc4.7.2/bin/vcftools --vcf /well/mccarthy/users/jason/projects/mv-compare/reviewer_comments/white_muscle-skeletal.recode.vcf --geno-r2 --ld-window 1000000 --out white_muscle-skeletal
+
+```
+
