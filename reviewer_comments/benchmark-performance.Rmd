@@ -189,9 +189,9 @@ fp <- 473 # false positives
 benchmark_performance <- function(tp,fp,fn,total1mb,total250kb){
   # num.loc.genes is the total number of evaluated genes at mQTL loci 
   print("Sensitivity (TP / (TP+FN) x 100: " %&% round(tp/(tp+fn) * 100,2))
-  print("Positive Predictive Value (TP / (TP + FP) x 100): " %&% round(tp/(tp+fp) * 100,2))
-  
   ### Numbers within 1Mb (2Mb window)
+  fp <- 473 
+  print("Positive Predictive Value (TP / (TP + FP) x 100): " %&% round(tp/(tp+fp) * 100,2))
   tn1mb <- est.tn(total1mb,tp,fp,fn)
   print("True negatives within 1Mb of metQTLs (TG - (TP + FP) - FN): " %&% tn1mb)
   print("Specificity within 1Mb of metQTLs (TN/(TN+FP) x 100): " %&% 
@@ -199,7 +199,9 @@ benchmark_performance <- function(tp,fp,fn,total1mb,total250kb){
   print("Accuracy within 1Mb of metQTLs ((TN+TP)/(TN+TP+FN+FP) x 100): " %&% 
           round((tn1mb+tp)/(tn1mb+tp+fn+fp) * 100,2))
   
-  ### Adjusted number within 250kb (500kb window)  
+  ### Adjusted number within 250kb (500kb window)
+  fp <- 197
+  print("Positive Predictive Value (TP / (TP + FP) x 100): " %&% round(tp/(tp+fp) * 100,2))
   tn250kb <- est.tn(total250kb,tp,fp,fn)
   print("True negatives within 250kb of metQTLs (TG - (TP + FP) - FN): " %&% tn250kb)
   print("Specificity within 250kb of metQTLs (TN/(TN+FP) x 100): " %&% 
@@ -218,8 +220,8 @@ total250kb <- length(unique(sub250kb.genes)) # currently looking at genes w/n 25
 
 benchmark_performance(tp,fp,fn,total1mb,total250kb)
 
-benchmark_performance(tp,494,fn,total1mb,total250kb)
-benchmark_performance(tp,197,fn,total1mb,total250kb)
+#benchmark_performance(tp,494,fn,total1mb,total250kb)
+#benchmark_performance(tp,197,fn,total1mb,total250kb)
 
 ```
 
