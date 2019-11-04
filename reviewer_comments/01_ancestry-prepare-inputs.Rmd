@@ -82,11 +82,11 @@ Subset VCF files to these SNPs in several ways
 
 ```{bash}
 
-/apps/well/vcftools/0.1.14-gcc4.7.2/bin/vcftools --vcf /well/got2d/apayne/GTEx_v7/metabolite_paper/vcf_and_gt_data/full_unqced_vcf_with_all_final_positions.recode.vcf --snps /well/mccarthy/users/jason/projects/mv-compare/reviewer_comments/model_snp_list.txt --keep /well/mccarthy/users/jason/projects/mv-compare/reviewer_comments/aa_subjects.txt --recode --out aa_muscle-skeletal 
+/apps/well/vcftools/0.1.14-gcc4.7.2/bin/vcftools --gzvcf /well/got2d/GTEx_v7/genotypes/WGS/variant_calls/GTEx_Analysis_2016-01-15_v7_WholeGenomeSeq_635Ind_PASS_AB02_GQ20_HETX_MISS15_PLINKQC.vcf.gz --snps /well/mccarthy/users/jason/projects/mv-compare/reviewer_comments/model_snp_list.txt --keep /well/mccarthy/users/jason/projects/mv-compare/reviewer_comments/aa_subjects.txt --recode --out aa_muscle-skeletal 
 
-/apps/well/vcftools/0.1.14-gcc4.7.2/bin/vcftools --vcf /well/got2d/apayne/GTEx_v7/metabolite_paper/vcf_and_gt_data/full_unqced_vcf_with_all_final_positions.recode.vcf --snps /well/mccarthy/users/jason/projects/mv-compare/reviewer_comments/model_snp_list.txt --keep /well/mccarthy/users/jason/projects/mv-compare/reviewer_comments/white_subjects.txt --recode --out white_muscle-skeletal 
+/apps/well/vcftools/0.1.14-gcc4.7.2/bin/vcftools --gzvcf /well/got2d/GTEx_v7/genotypes/WGS/variant_calls/GTEx_Analysis_2016-01-15_v7_WholeGenomeSeq_635Ind_PASS_AB02_GQ20_HETX_MISS15_PLINKQC.vcf.gz --snps /well/mccarthy/users/jason/projects/mv-compare/reviewer_comments/model_snp_list.txt --keep /well/mccarthy/users/jason/projects/mv-compare/reviewer_comments/white_subjects.txt --recode --out white_muscle-skeletal 
 
-/apps/well/vcftools/0.1.14-gcc4.7.2/bin/vcftools --vcf /well/got2d/apayne/GTEx_v7/metabolite_paper/vcf_and_gt_data/full_unqced_vcf_with_all_final_positions.recode.vcf --snps /well/mccarthy/users/jason/projects/mv-compare/reviewer_comments/model_snp_list.txt --keep /well/mccarthy/users/jason/projects/mv-compare/reviewer_comments/all_subjects.txt --recode --out all_muscle-skeletal 
+/apps/well/vcftools/0.1.14-gcc4.7.2/bin/vcftools --gzvcf /well/got2d/GTEx_v7/genotypes/WGS/variant_calls/GTEx_Analysis_2016-01-15_v7_WholeGenomeSeq_635Ind_PASS_AB02_GQ20_HETX_MISS15_PLINKQC.vcf.gz --snps /well/mccarthy/users/jason/projects/mv-compare/reviewer_comments/model_snp_list.txt --keep /well/mccarthy/users/jason/projects/mv-compare/reviewer_comments/all_subjects.txt --recode --out all_muscle-skeletal 
 
 
 ```
