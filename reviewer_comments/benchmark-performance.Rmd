@@ -24,7 +24,7 @@ work.dir <- serv.dir2 %&% "projects/mv-compare/"
 input.dir <- serv.dir1 %&% "projects/mv-compare/"
 
 s6.df <- fread(input.dir %&% "input_files/" %&%
-                 "shin_supplemetary_tables_tableS6.txt")
+                 "shin_supplemetary_tables_tableS6.txt") # hg18;  
 s6.df$pairs <- s6.df$metabolite %&% ":" %&% s6.df$gene_name
 causal.df <- fread(input.dir %&% "input_files/" %&% "metabolite_GWAS_genes_from-Anne.txt")
 
@@ -183,7 +183,7 @@ Estmate all values function
 ```{r}
 
 tp <- 41 # true positives
-fn <- 19 # false negatives; not 20 it seems! Must correct in manuscript 
+fn <- 20 # false negatives
 fp <- 473 # false positives 
 
 benchmark_performance <- function(tp,fp,fn,total1mb,total250kb){
