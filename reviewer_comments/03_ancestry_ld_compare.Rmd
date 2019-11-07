@@ -1,0 +1,175 @@
+---
+title: "Untitled"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Setup 
+
+```{r}
+
+"%&%" <- function(a,b) {paste0(a,b)}
+library("tidyverse");library("data.table")
+
+serv.dir <- "/home/jason/science/servers/FUSE5/"
+work.dir <- serv.dir %&% "projects/mv-compare/"
+
+mod.df <- fread(work.dir %&% "reviewer_comments/model_snp_info.txt")
+
+ref.df <- c()
+gene.vec <- unique(mod.df$Gene)
+for (i in 1:length(gene.vec)){
+  g <- gene.vec[i]
+  sub <- filter(mod.df,Gene==g)
+  num <- dim(sub)[1]
+  build.df <- data.frame(Gene=g,nsnps=num,stringsAsFactors = F)
+  ref.df <- rbind(ref.df,build.df)
+}
+
+```
+
+
+```{r}
+
+white.df <- fread(work.dir %&% "reviewer_comments/white_muscle-skeletal_SUBSET.ld.txt")
+aa.df <- fread(work.dir %&% "reviewer_comments/aa_muscle-skeletal_SUBSET.ld.txt")
+all.df <- fread(work.dir %&% "reviewer_comments/all_muscle-skeletal_SUBSET.ld.txt")
+
+
+```
+
+```{r}
+
+gene.vec <- all.df$Gene %>% unique(.)
+full.df <- c() 
+pb <- txtProgressBar(min=0,max=length(gene.vec),style=3)
+for (i in 1:length(gene.vec)){
+  setTxtProgressBar(pb,i)
+  g <- gene.vec[i]
+  sub <- filter(all.df,Gene==g)
+  nsnps <- filter(ref.df,Gene==g)$nsnps
+  med.r2.all <- median(sub$r2)
+  mean.r2.all <- mean(sub$r2)
+  sub <- filter(white.df,Gene==g)
+  med.r2.white <- median(sub$r2)
+  mean.r2.white <- mean(sub$r2)
+  sub <- filter(aa.df,Gene==g)
+  med.r2.aa <- median(sub$r2)
+  mean.r2.aa <- mean(sub$r2)
+  build.df <- data.frame(Gene=g,nsnps,
+                         med.r2.all,med.r2.white,med.r2.aa,
+                         mean.r2.all,mean.r2.white,mean.r2.aa,stringsAsFactors = F)
+  full.df <- rbind(full.df,build.df)
+}
+
+
+```
+
+```{r}
+library("viridis")
+
+sub <- filter(full.df)
+
+plt1 <- ggplot(data=sub,aes(mean.r2.all)) + 
+  geom_density(fill="grey") + 
+  geom_density(data=sub,aes(mean.r2.white),fill=viridis(10)[5],alpha=0.4) + 
+  geom_density(data=sub,aes(mean.r2.aa),fill=viridis(10)[10],alpha=0.4) + 
+  coord_cartesian(xlim=c(0,1))
+ 
+plt2 <- ggplot(data=sub,aes(med.r2.all)) + 
+  geom_density(fill="grey") + 
+  geom_density(data=sub,aes(med.r2.white),fill=viridis(10)[5],alpha=0.4) + 
+  geom_density(data=sub,aes(med.r2.aa),fill=viridis(10)[10],alpha=0.4) + 
+  coord_cartesian(xlim=c(0,1))
+
+# Kruskall Wallis Test 
+kruskal.test(mean.r2.white ~ mean.r2.all, data=sub)
+kruskal.test(mean.r2.aa ~ mean.r2.all, data=sub)
+kruskal.test(mean.r2.aa ~ mean.r2.white, data=sub)
+
+kruskal.test(med.r2.white ~ med.r2.all, data=sub)
+kruskal.test(med.r2.aa ~ med.r2.all, data=sub)
+kruskal.test(med.r2.aa ~ med.r2.white, data=sub)
+
+# Tests indicate that all follow the same distribution 
+
+# Kolmogorov-Smirnov Tests 
+ks.test(mean.r2.all,mean.r2.white, data=na.omit(sub))
+ks.test(mean.r2.all,mean.r2.aa, data=na.omit(sub))
+ks.test(mean.r2.aa,mean.r2.white, data=na.omit(sub))
+
+ks.test(med.r2.white,med.r2.all, data=na.omit(sub))
+ks.test(med.r2.aa,med.r2.all, data=na.omit(sub))
+ks.test(med.r2.aa,med.r2.white, data=na.omit(sub))
+
+wilcox.test(sub$med.r2.white, sub$med.r2.all, paired = TRUE, alternative = "two.sided")
+wilcox.test(sub$med.r2.aa, sub$med.r2.white, paired = TRUE, alternative = "two.sided")
+
+cor.test(sub$med.r2.white, sub$med.r2.all)
+cor.test(sub$med.r2.aa, sub$med.r2.all)
+cor.test(sub$med.r2.aa, sub$med.r2.white)
+
+wilcox.test(sub$med.r2.aa, sub$med.r2.all, paired = TRUE, alternative = "two.sided")
+wilcox.test(sub$med.r2.white, sub$med.r2.all, paired = TRUE, alternative = "two.sided")
+
+
+
+```
+
+
+```{r}
+
+p3a <- ggplot(data=sub,aes(x=med.r2.all,y=med.r2.white)) + 
+  geom_point() + 
+  geom_smooth(method="lm",color="red")  + geom_abline()
+
+p3b <- ggplot(data=sub,aes(x=med.r2.all,y=med.r2.aa)) + 
+  geom_point() + 
+  geom_smooth(method="lm",color="red") + geom_abline()
+
+p3c <- ggplot(data=sub,aes(x=med.r2.white,y=med.r2.aa)) + 
+  geom_point() + 
+  geom_smooth(method="lm",color="red") + geom_abline()
+```
+
+
+
+#
+
+
+```{r}
+
+full.df$gene <- map(full.df$Gene, function(s){
+  strsplit(s,split=".",fixed=TRUE)[[1]][1]
+}) %>% as.character(.)
+serv.dir1 <- "/home/jason/science/servers/FUSE/"#"/Users/jtorres/FUSE/"
+input.dir <- serv.dir1 %&% "projects/mv-compare/"
+mtx.df <- fread(input.dir %&% "input_files/" %&%
+          "metaxcan_full_results_filtered_for_model_fit_and_pval_at_0.01.txt")
+mus.df <- filter(mtx.df,Tissue=="Muscle_Skeletal")
+names(mus.df)[1] <- "gene"
+eval.df <- inner_join(mus.df,full.df,by="gene")
+
+causal.df <- fread(input.dir %&% "input_files/" %&% "metabolite_GWAS_genes_from-Anne.txt")
+causal.sub <- filter(causal.df,!grepl("unknown",predicted_causal))
+causal.sub$pair <- causal.sub$Metaboid %&% ":" %&% causal.sub$Gene
+
+eval.df$pair <- eval.df$metabolite %&% ":" %&% eval.df$gene_name
+eval.df$causal <- eval.df$pair %in% causal.sub$pair
+
+p1 <- ggplot(data=eval.df,aes(x=causal,y=mean.r2.all)) + 
+  geom_boxplot()
+p2 <- ggplot(data=eval.df,aes(x=causal,y=mean.r2.aa)) + 
+  geom_boxplot()
+p3 <- ggplot(data=eval.df,aes(x=causal,y=mean.r2.white)) + 
+  geom_boxplot()
+
+eval.df$diff <- eval.df$mean.r2.white - eval.df$mean.r2.aa
+full.df$diff <- full.df$mean.r2.white - full.df$mean.r2.aa
+
+
+```
+
